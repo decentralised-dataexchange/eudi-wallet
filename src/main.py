@@ -315,4 +315,7 @@ async def main():
     session_response = await authorisation("siopSession", headers, options={"client": client, "callback_url": callback_url, "verified_claims": vp_base64})
     console.log("Onboarding Service -- Siop Session", session_response)
 
-asyncio.run(main())
+
+if __name__ == "__main__":
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(main())
