@@ -1,5 +1,5 @@
-from ethereum import Ethereum
-from ebsi_did import EbsiDid
+from ..ethereum import Ethereum
+from ..ebsi_did import EbsiDid
 
 
 class EbsiClient:

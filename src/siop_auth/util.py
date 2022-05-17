@@ -1,6 +1,17 @@
-from ethereum import Ethereum
-from did_jwt import create_jwt
-from did_jwt.signer_algorithm import ES256K_signer_algorithm
+from ..ethereum import Ethereum
+from ..did_jwt import create_jwt, decode_jwt
+from ..did_jwt.signer_algorithm import ES256K_signer_algorithm
+
+def get_audience(jwt):
+    decoded_jwt = decode_jwt(jwt)
+
+    payload = decoded_jwt.get("payload")
+
+    assert payload is not None, "No payload found"
+
+    audience = payload.get("aud")
+
+    return audience
 
 
 async def get_jwk(kid: str, eth_client: Ethereum) -> dict:

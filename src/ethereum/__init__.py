@@ -104,6 +104,13 @@ class Ethereum:
         """
         Returns the public key in JWK format.
 
+        {
+            "kty": "EC",
+            "crv": "secp256k1",
+            "x": "cdfNOPbpuw9oiafGhAu2xwvgM7z5sBQJCsfj-WKjDBY",
+            "y": "RUrM3fNy-GCWIGPc4NIUYmW6w8WNN5JAfCE2ZmbCpN8"
+        }
+
         Returns:
             dict: Public key in JWK format.
         """
@@ -119,7 +126,7 @@ class Ethereum:
         """
         key = jwk.JWK.from_pem(self.private_key_from_hex().to_pem())
         return json.loads(key.export_private())
-    
+
     @property
     def jwk_thumbprint(self) -> str:
         """

@@ -1,7 +1,34 @@
-from urllib.parse import parse_qs, urlparse
-
 import aiohttp
 import base64
+import datetime
+from urllib.parse import parse_qs, urlparse
+
+
+def pad_base64(data):
+    """
+    Pads a base64 encoded string
+
+    Args:
+        data (str): The base64 encoded string
+
+    Returns:
+        str: The padded base64 encoded string
+    """
+
+    data = data.replace("-", "+").replace("_", "/")
+
+    missing_padding = len(data) % 4
+    if missing_padding:
+        data += "=" * (4 - missing_padding)
+
+    return data
+
+
+def format_iat_date(input):
+    """
+    Format iat claim to be in ISO8601 format
+    """
+    return datetime.datetime.fromtimestamp(input).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def base64url_to_hex(data):
@@ -18,6 +45,7 @@ def base64url_to_hex(data):
         data += "=" * (4 - missing_padding)
 
     return base64.b64decode(data).hex()
+
 
 async def http_call(url, method, data=None, headers=None):
     """

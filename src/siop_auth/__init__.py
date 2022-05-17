@@ -1,8 +1,9 @@
 from jwcrypto import jwk
-from ethereum import Ethereum
+from ..ethereum import Ethereum
 from urllib import parse
 
-from .util import get_jwk, sign_did_auth_internal
+from .util import get_jwk, sign_did_auth_internal, get_audience
+from src.did_jwt import verify_jwt
 
 
 class Agent:
@@ -31,7 +32,7 @@ class Agent:
     def did_registry(self, did_registry):
         self._did_registry = did_registry
 
-    async def create_authentication_response(self, did, nonce, redirect_uri, eth_client: Ethereum):
+    async def create_authentication_response(self, did, nonce, redirect_uri, eth_client: Ethereum, claims={}):
         """
         Creates an authentication response.
         """
@@ -45,6 +46,9 @@ class Agent:
             "nonce": nonce,
             "sub_jwk": await get_jwk(f"{did}#key-1", eth_client),
             "did": did,
+            "claims": {
+                **claims
+            }
         }
 
         jwt = await sign_did_auth_internal(did, payload, eth_client.private_key)
@@ -57,3 +61,13 @@ class Agent:
         }
 
         return url_response
+
+    async def verify_authentication_request(self, jwt):
+
+        options = {
+            "registry": self.did_registry
+        }
+
+        verified_jwt = await verify_jwt(jwt, options)
+
+        return verified_jwt[0]
