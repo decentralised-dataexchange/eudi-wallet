@@ -9,7 +9,7 @@ async-timeout==4.0.2
 attrs==21.4.0
 autopep8==1.6.0
 backcall==0.2.0
-base58==2.1.1
+base58==1.0.3
 beautifulsoup4==4.11.1
 bitarray==1.2.2
 bleach==5.0.0
@@ -17,7 +17,7 @@ canonicaljson==1.6.1
 certifi==2021.10.8
 cffi==1.15.0
 charset-normalizer==2.0.12
-coincurve==17.0.0
+coincurve==15.0.1
 commonmark==0.9.1
 cryptography==37.0.2
 cytoolz==0.11.2
@@ -25,6 +25,7 @@ debugpy==1.6.0
 decorator==5.1.1
 defusedxml==0.7.1
 Deprecated==1.2.13
+eciespy==0.3.11
 entrypoints==0.4
 eth-abi==2.1.1
 eth-account==0.5.7
@@ -81,6 +82,7 @@ psutil==5.9.0
 ptyprocess==0.7.0
 pure-eval==0.2.2
 py-multibase==1.0.3
+pyaes==1.6.1
 pycodestyle==2.8.0
 pycparser==2.21
 pycryptodome==3.14.1
@@ -100,6 +102,7 @@ Send2Trash==1.8.0
 simplejson==3.17.6
 six==1.16.0
 soupsieve==2.3.2.post1
+sslcrypto==5.3
 stack-data==0.2.0
 terminado==0.15.0
 tinycss2==1.1.1

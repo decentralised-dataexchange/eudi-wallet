@@ -1,8 +1,10 @@
-from jwcrypto import jwk
+import json
+
+from src.ebsi_client import EbsiClient
 from ..ethereum import Ethereum
 from urllib import parse
 
-from .util import get_jwk, sign_did_auth_internal, get_audience
+from .util import get_jwk, sign_did_auth_internal, aes_cbc_ecies_decrypt
 from src.did_jwt import verify_jwt
 
 
@@ -71,3 +73,23 @@ class Agent:
         verified_jwt = await verify_jwt(jwt, options)
 
         return verified_jwt[0]
+
+    async def verify_authentication_response(self, response, nonce, client: EbsiClient):
+
+        ake1_enc_payload = response.get("ake1_enc_payload")
+
+        decrypted_payload = await aes_cbc_ecies_decrypt(ake1_enc_payload, client)
+
+        assert decrypted_payload.get(
+            "did"), "DID not found in decrypted payload"
+        assert decrypted_payload.get(
+            "access_token"), "Access token not found in decrypted payload"
+
+        decrypted_payload_nonce = decrypted_payload.get("nonce")
+
+        if decrypted_payload_nonce:
+            assert decrypted_payload_nonce == nonce, "Nonce mismatch"
+
+        # TODO: Verify access token (JWT), audience : "ebsi-core-services"
+
+        return decrypted_payload.get("access_token")

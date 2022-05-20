@@ -167,10 +167,24 @@ async def compute(method, headers, options):
 
         return request["client_id"]
 
+    async def verify_session_response():
+
+        session_response = options.get("session_response")
+
+        client: EbsiClient = options.get("client")
+
+        siop_agent = Agent(private_key=client.eth.private_key,
+                           did_registry=app_config["conformance"]["did"]["api"] + app_config["conformance"]["did"]["endpoints"]["post"]["identifiers"])
+
+        access_token = await siop_agent.verify_authentication_response(session_response.get("response"), session_response.get("nonce"), client)
+
+        return access_token
+
     switcher = {
         "createPresentation": create_presentation,
         "canonicalizeBase64url": canonicalize_base64_url,
-        "verifyAuthenticationRequest": verify_authentication_request
+        "verifyAuthenticationRequest": verify_authentication_request,
+        "verifySessionResponse": verify_session_response
     }
 
     method_fn = switcher.get(method)
@@ -295,7 +309,7 @@ async def main():
     }
 
     siop_auth_request = await authorisation("siopRequest", headers, None)
-    console.log("Onboarding Service -- Siop Request", siop_auth_request)
+    console.log("Authorisation Service -- Siop Request", siop_auth_request)
 
     uri_decoded = siop_auth_request["uri"].replace("openid://", "")
     siop_auth_request_prepared = {
@@ -305,7 +319,7 @@ async def main():
 
     callback_url = await compute("verifyAuthenticationRequest", None, {"client": client, "request": siop_auth_request_prepared})
     console.log(
-        "Onboarding Service -- Verify Authentication Request", callback_url)
+        "Authorisation Service -- Verify Authentication Request", callback_url)
 
     headers = {
         "Authorization": f"Bearer {jwt_auth_req}",
@@ -313,7 +327,11 @@ async def main():
     }
 
     session_response = await authorisation("siopSession", headers, options={"client": client, "callback_url": callback_url, "verified_claims": vp_base64})
-    console.log("Onboarding Service -- Siop Session", session_response)
+    console.log("Authorisation Service -- Siop Session", session_response)
+
+    access_token = await compute("verifySessionResponse", None, {"client": client, "session_response": session_response})
+    console.log(
+        "Authorisation Service -- Verify Session Response -- Access Token", access_token)
 
 
 if __name__ == "__main__":
