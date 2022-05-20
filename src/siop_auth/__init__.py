@@ -90,6 +90,12 @@ class Agent:
         if decrypted_payload_nonce:
             assert decrypted_payload_nonce == nonce, "Nonce mismatch"
 
-        # TODO: Verify access token (JWT), audience : "ebsi-core-services"
+        # Verify the access token JWT.
+        options = {
+            "registry": self.did_registry,
+            "audience": "ebsi-core-services"
+        }
+
+        await verify_jwt(decrypted_payload.get("access_token"), options)
 
         return decrypted_payload.get("access_token")

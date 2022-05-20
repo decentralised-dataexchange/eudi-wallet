@@ -147,4 +147,13 @@ async def verify_jwt(jwt, config):
 
     assert (exp <= now - skew_time) == False, "Expired JWT"
 
+    audience = config.get("audience")
+
+    if payload.get("aud"):
+        if audience:
+            if isinstance(audience, list):
+                assert payload.get("aud") in audience, "Invalid audience"
+            else:
+                assert payload.get("aud") == audience, "Invalid audience"
+
     return payload, did_resolution_result, did, authenticator, jwt
