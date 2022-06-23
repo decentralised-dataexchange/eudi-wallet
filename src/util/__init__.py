@@ -47,6 +47,19 @@ def base64url_to_hex(data):
 
     return base64.b64decode(data).hex()
 
+async def http_call_text(url, method, data=None, headers=None):
+    """
+    Performs an http request and return response as text
+
+    Args:
+        url (str): The URL to send the request to
+        method (str): The HTTP method to use
+        data (dict): The data to send with the request
+        headers (dict): The headers to send with the request
+    """
+    async with aiohttp.ClientSession(headers=headers) as session:
+        async with session.request(method, url, data=data) as resp:
+            return await resp.text()
 
 async def http_call(url, method, data=None, headers=None):
     """
