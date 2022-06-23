@@ -1,8 +1,13 @@
 import base64
 import json
+import uuid
+from venv import create
+
+from src.ebsi_client import EbsiClient
 from ..did_jwt import create_jwt
 from ..verifiable_presentation import create_verifiable_presentation
 from ..util import pad_base64
+
 
 def extract_iat_from_jwt(jwt):
     token = jwt.split(".")
@@ -56,3 +61,36 @@ async def create_vp(client, alg, vc, config):
         required_proof,
         signature
     )
+
+
+async def create_vp_jwt(vc, config):
+
+    payload = {
+        "nonce": str(uuid.uuid4()),
+        "vc": vc
+    }
+
+    options = {
+        "resolver": "https://api.conformance.intebsi.xyz/did-registry/v2/identifiers",
+        "tirUrl": "https://api.conformance.intebsi.xyz/trusted-issuers-registry/v2/issuers",
+    }
+
+    vp_jwt = await create_jwt(
+        payload,
+        {
+            "alg": "ES256K",
+            "issuer": config["issuer"],
+            "signer": config["signer"],
+            "canonicalize": True
+        },
+        {
+            "alg": "ES256K",
+            "typ": "JWT",
+            "kid":  f"{options['resolver']}/{config['issuer']}#keys-1"
+        }
+    )
+
+    return {
+        "jwtVp": vp_jwt,
+        "payload": payload
+    }
