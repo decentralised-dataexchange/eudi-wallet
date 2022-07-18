@@ -4,11 +4,15 @@ from ..ebsi_did import EbsiDid
 
 class EbsiClient:
 
-    def __init__(self, did_version=1) -> None:
+    def __init__(self, did_version: str = "v1") -> None:
 
         self._ebsi_did = EbsiDid(did_version)
         self._eth = Ethereum()
         self._did_version = did_version
+
+    @property
+    def did_version(self):
+        return self._did_version
 
     @property
     def ebsi_did(self) -> EbsiDid:
