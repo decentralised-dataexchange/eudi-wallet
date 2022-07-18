@@ -203,8 +203,16 @@ async def wallet(method):
 
         return client
 
+    async def init_v2():
+
+        client = EbsiClient(did_version=2)
+        client.ebsi_did.generate_did(eth=client.eth)
+
+        return client
+
     switcher = {
-        "init": init
+        "init": init,
+        "init_v2": init_v2
     }
 
     method_fn = switcher.get(method)
