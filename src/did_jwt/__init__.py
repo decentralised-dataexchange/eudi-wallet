@@ -34,7 +34,7 @@ def decode_jwt(jwt):
     return decoded_jwt
 
 
-async def create_jws(payload, signer, header) -> str:
+async def create_jws(payload, signer, header, canon: bool = True) -> str:
     """
     Creates a JWS.
 
@@ -50,10 +50,10 @@ async def create_jws(payload, signer, header) -> str:
     """
 
     encoded_payload = base64.urlsafe_b64encode(
-        canonicalize(payload)).decode("utf-8").replace("=", "")
+        json.dumps(payload).encode("utf-8") if not canon else canonicalize(payload)).decode("utf-8").replace("=", "")
 
     encoded_header = base64.urlsafe_b64encode(
-        canonicalize(header)).decode("utf-8").replace("=", "")
+        json.dumps(header).encode("utf-8") if not canon else canonicalize(header)).decode("utf-8").replace("=", "")
 
     signing_input = ".".join([encoded_header, encoded_payload])
 
@@ -63,7 +63,7 @@ async def create_jws(payload, signer, header) -> str:
     return ".".join([signing_input, signature])
 
 
-async def create_jwt(payload, options, header) -> str:
+async def create_jwt(payload, options, header, exp: bool = True, canon: bool = True) -> str:
     """
     Creates a JWT.
 
@@ -82,12 +82,14 @@ async def create_jwt(payload, options, header) -> str:
 
     timestamps = {
         "iat": iat,
-        "exp": iat + EXPIRATION_TIME
     }
 
-    full_payload = {**timestamps, **payload, "iss": options["issuer"]}
+    if exp:
+        timestamps["exp"] = iat + EXPIRATION_TIME
 
-    return await create_jws(full_payload, options["signer"], header)
+    full_payload = {**payload, **timestamps, "iss": options["issuer"]}
+
+    return await create_jws(full_payload, options["signer"], header, canon)
 
 
 async def verify_jwt(jwt, config):
