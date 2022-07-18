@@ -2,22 +2,39 @@ import uuid
 import asyncio
 import base64
 import json
-
+import secrets
+import jwt
+import urllib
+import time
 from rich.console import Console
 from .siop_auth import Agent
 from .ebsi_client import EbsiClient
 from .util import (
     parse_query_string_parameters_from_url,
     http_call,
+    http_call_text,
+    http_call_text_redirects_disabled,
     verifiable_presentation
 )
 from .did_jwt.signer_algorithm import ES256K_signer_algorithm
 from .did_jwt.util.json_canonicalize.Canonicalize import canonicalize
+from .did_jwt import create_jwt, decode_jwt
 
 console = Console()
 
 app_config = {
     "conformance": {
+        "api": "https://api.conformance.intebsi.xyz",
+        "endpoints": {
+            "issuer-initiate-v1": "/conformance/v1/issuer-mock/initiate",
+            "issuer-authorize-v1": "/conformance/v1/issuer-mock/authorize",
+            "issuer-initiate-v2": "/conformance/v2/issuer-mock/initiate",
+            "issuer-authorize-v2": "/conformance/v2/issuer-mock/authorize",
+            "issuer-token-v1": "/conformance/v1/issuer-mock/token",
+            "issuer-token-v2": "/conformance/v2/issuer-mock/token",
+            "issuer-credential-v1": "/conformance/v1/issuer-mock/credential",
+            "issuer-credential-v2": "/conformance/v2/issuer-mock/credential"
+        },
         "onboarding": {
             "api": "https://api.conformance.intebsi.xyz",
             "endpoints": {
@@ -117,6 +134,200 @@ async def authorisation(method, headers, options):
     return await method_fn()
 
 
+async def conformance(method, headers=None, options=None):
+
+    async def issuer_initiate():
+        url = app_config["conformance"]["api"] + \
+            app_config["conformance"]["endpoints"]["issuer-initiate-v2"]
+        response = await http_call_text(url, "GET", data=None, headers=headers)
+        return response
+
+    async def issuer_authorize():
+        credential_type = options.get("credential_type")
+
+        client: EbsiClient = options.get("client")
+
+        redirect_uri = "https://localhost:3000"
+
+        url_params = {
+            "scope": "openid conformance_testing",
+            "response_type": "code",
+            "redirect_uri": redirect_uri,
+            "client_id": redirect_uri if client.did_version == "v1" else client.ebsi_did.did,
+            "response_mode": "post",
+            "state": secrets.token_bytes(6).hex(),
+        }
+
+        authorize_url = app_config["conformance"]["api"] + app_config["conformance"]["endpoints"][f"issuer-authorize-{client.did_version}"] + \
+            "?scope={scope}&response_type={response_type}&redirect_uri={redirect_uri}&client_id={client_id}&response_mode={response_mode}&state={state}"
+
+        if client.did_version == "v2":
+            url_params["authorization_details"] = json.dumps([
+                {
+                    "type": "openid_credential",
+                    "credential_type": credential_type,
+                    "format": "jwt_vc",
+                }
+            ])
+
+            authorize_url += "&authorization_details={authorization_details}"
+        else:
+            url_params["nonce"] = secrets.token_bytes(6).hex()
+            authorize_url += "&nonce={nonce}"
+
+        if client.did_version == "v2":
+            issuer_authorize_response = await http_call_text_redirects_disabled(authorize_url.format(**url_params), "GET", data=None, headers=headers)
+            location = str(issuer_authorize_response).split(
+                "Location': \'")[1].split("\'")[0]
+            state = parse_query_string_parameters_from_url(
+                location).get("state")[0]
+            code = parse_query_string_parameters_from_url(
+                location).get("code")[0]
+            return {
+                "state": state,
+                "code": code
+            }
+        else:
+            issuer_authorize_response = await http_call(authorize_url.format(**url_params), "GET", data=None, headers=headers)
+            return issuer_authorize_response
+
+    async def issuer_token():
+        code = options.get("code")
+        did_version = options.get("did_version", "v1")
+
+        redirect_uri = "https://localhost:3000"
+
+        token_url = app_config["conformance"]["api"] + \
+            app_config["conformance"]["endpoints"][f"issuer-token-{did_version}"]
+
+        payload = {
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": redirect_uri
+        }
+
+        if did_version == "v2":
+
+            if headers:
+                headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+            token_response = await http_call(token_url, "POST", data=f"code={code}&grant_type=authorization_code&redirect_uri={redirect_uri}", headers=headers)
+            return token_response
+        else:
+
+            if headers:
+                headers["Content-Type"] = "application/json"
+
+            token_response = await http_call(token_url, "POST", data=json.dumps(payload), headers=headers)
+            return token_response
+
+    async def issuer_credential():
+        c_nonce = options.get("c_nonce")
+        client: EbsiClient = options.get("client")
+        issuer_url = options.get("issuer_url")
+        credential_type = options.get("credential_type")
+
+        redirect_uri = options.get("redirect_uri", "https://localhost:3000")
+
+        jwt_payload = None
+
+        if client.did_version == "v1":
+            jwt_payload = {
+                "c_nonce": c_nonce
+            }
+        else:
+            jwt_payload = {
+                "nonce": c_nonce,
+                "aud": issuer_url
+            }
+
+        jwt_payload["iat"] = int(time.time())
+        jwt_payload["iss"] = client.ebsi_did.did
+
+        jwt_header = {
+            "alg": "ES256K",
+            "typ": "JWT",
+            "kid": f"{client.ebsi_did.did}#{client.eth.jwk_thumbprint}",
+        }
+
+        if client.did_version == "v2":
+            public_key_jwk = client.eth.public_key_to_jwk()
+
+            public_key_jwk = {
+                "kty": public_key_jwk.get("kty"),
+                "crv": public_key_jwk.get("crv"),
+                "x": public_key_jwk.get("x"),
+                "y": public_key_jwk.get("y")
+            }
+
+            jwt_header["jwk"] = public_key_jwk
+
+        private_key = client.eth.private_key
+
+        jws = await create_jwt(
+            jwt_payload,
+            {
+                "issuer": client.ebsi_did.did,
+                "signer": await ES256K_signer_algorithm(private_key),
+            },
+            jwt_header,
+            exp=False,
+            canon=False
+        )
+
+        if client.did_version == "v1":
+
+            if headers:
+                headers["Content-Type"] = "application/json"
+
+            credential_url = "https://api.conformance.intebsi.xyz/conformance/v1/issuer-mock/credential"
+
+            payload = {
+                "type": "https://api.test.intebsi.xyz/trusted-schemas-registry/v1/schemas/0x1ee207961aba4a8ba018bacf3aaa338df9884d52e993468297e775a585abe4d8",
+                "format": "jwt_vc",
+                "did": client.ebsi_did.did,
+                "proof": {
+                    "type": "JWS",
+                    "verificationMethod": f"{client.ebsi_did.did}#keys-1",
+                    "jws": jws
+                },
+                "grant_type": "authorization_code",
+                "redirect_uri": redirect_uri
+            }
+
+            credential_response = await http_call(credential_url, "POST", data=json.dumps(payload), headers=headers)
+
+            return credential_response
+
+        else:
+
+            if headers:
+                headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+            credential_url = app_config["conformance"]["api"] + \
+                app_config["conformance"]["endpoints"][
+                    f"issuer-credential-{client.did_version}"]
+
+            payload_str = f"type={credential_type}&proof[proof_type]=jwt&proof[jwt]={jws}"
+
+            credential_response = await http_call(credential_url, "POST", data=payload_str, headers=headers)
+
+            return credential_response
+
+    switcher = {
+        "issuerInitiate": issuer_initiate,
+        "issuerAuthorize": issuer_authorize,
+        "issuerToken": issuer_token,
+        "issuerCredential": issuer_credential
+    }
+
+    method_fn = switcher.get(method)
+
+    assert method_fn is not None, "Method not found"
+
+    return await method_fn()
+
+
 async def compute(method, headers, options):
 
     async def create_presentation():
@@ -205,7 +416,7 @@ async def wallet(method):
 
     async def init_v2():
 
-        client = EbsiClient(did_version=2)
+        client = EbsiClient(did_version="v2")
         client.ebsi_did.generate_did(eth=client.eth)
 
         return client
