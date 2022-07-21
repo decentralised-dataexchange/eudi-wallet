@@ -1,11 +1,11 @@
 import base64
 import json
 import uuid
-from venv import create
 
-from src.ebsi_client import EbsiClient
+from ..ebsi_client import EbsiClient
 from ..did_jwt import create_jwt
 from ..verifiable_presentation import create_verifiable_presentation
+from ..verifiable_presentation.v2 import create_verifiable_presentation_jwt
 from ..util import pad_base64
 
 
@@ -63,34 +63,68 @@ async def create_vp(client, alg, vc, config):
     )
 
 
-async def create_vp_jwt(vc, config):
+async def create_vp_jwt(vc, config, audience=None):
 
-    payload = {
-        "nonce": str(uuid.uuid4()),
-        "vc": vc
-    }
+    client: EbsiClient = config.get("client")
+    audience = audience
 
-    options = {
-        "resolver": "https://api.conformance.intebsi.xyz/did-registry/v2/identifiers",
-        "tirUrl": "https://api.conformance.intebsi.xyz/trusted-issuers-registry/v2/issuers",
-    }
+    if client.did_version == "v1":
 
-    vp_jwt = await create_jwt(
-        payload,
-        {
-            "alg": "ES256K",
-            "issuer": config["issuer"],
-            "signer": config["signer"],
-            "canonicalize": True
-        },
-        {
-            "alg": "ES256K",
-            "typ": "JWT",
-            "kid":  f"{options['resolver']}/{config['issuer']}#keys-1"
+        payload = {
+            "nonce": str(uuid.uuid4()),
+            "vc": vc
         }
-    )
 
-    return {
-        "jwtVp": vp_jwt,
-        "payload": payload
-    }
+        options = {
+            "resolver": "https://api.conformance.intebsi.xyz/did-registry/v2/identifiers",
+            "tirUrl": "https://api.conformance.intebsi.xyz/trusted-issuers-registry/v2/issuers",
+        }
+
+        vp_jwt = await create_jwt(
+            payload,
+            {
+                "alg": "ES256K",
+                "issuer": config["issuer"],
+                "signer": config["signer"],
+                "canonicalize": True
+            },
+            {
+                "alg": "ES256K",
+                "typ": "JWT",
+                "kid":  f"{options['resolver']}/{config['issuer']}#keys-1"
+            }
+        )
+
+        return {
+            "jwtVp": vp_jwt,
+            "payload": payload
+        }
+
+    else:
+
+        issuer = {
+            "did": client.ebsi_did.did,
+            "kid": client.eth.jwk_thumbprint,
+            "privateKeyJwk": client.eth.private_key_to_jwk(),
+            "publicKeyJwk": client.eth.public_key_to_jwk(),
+            "alg": "ES256K"
+        }
+
+        payload = {
+            "id": f"urn:did:{str(uuid.uuid4())}",
+            "@context": ["https://www.w3.org/2018/credentials/v1"],
+            "type": ["VerifiablePresentation"],
+            "holder": client.ebsi_did.did,
+            "verifiableCredential": [
+                vc
+            ]
+        }
+
+        vp_jwt = await create_verifiable_presentation_jwt(payload, issuer, audience, {
+            "client": client
+        })
+
+        return {
+            "jwtVp": vp_jwt,
+            "payload": payload
+        }
