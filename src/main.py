@@ -14,11 +14,13 @@ from .util import (
     http_call,
     http_call_text,
     http_call_text_redirects_disabled,
-    verifiable_presentation
+    verifiable_presentation,
 )
+from .util.verifiable_presentation import create_vp_jwt
 from .did_jwt.signer_algorithm import ES256K_signer_algorithm
 from .did_jwt.util.json_canonicalize.Canonicalize import canonicalize
 from .did_jwt import create_jwt, decode_jwt
+from .verifiable_presentation.v2 import create_verifiable_presentation_jwt
 
 console = Console()
 
@@ -33,7 +35,11 @@ app_config = {
             "issuer-token-v1": "/conformance/v1/issuer-mock/token",
             "issuer-token-v2": "/conformance/v2/issuer-mock/token",
             "issuer-credential-v1": "/conformance/v1/issuer-mock/credential",
-            "issuer-credential-v2": "/conformance/v2/issuer-mock/credential"
+            "issuer-credential-v2": "/conformance/v2/issuer-mock/credential",
+            "verifier-auth-request-v1": "/conformance/v1/verifier-mock/authentication-requests",
+            "verifier-auth-request-v2": "/conformance/v2/verifier-mock/authentication-requests",
+            "verifier-auth-response-v1": "/conformance/v1/verifier-mock/authentication-responses",
+            "verifier-auth-response-v2": "/conformance/v2/verifier-mock/authentication-responses"
         },
         "onboarding": {
             "api": "https://api.conformance.intebsi.xyz",
@@ -314,11 +320,130 @@ async def conformance(method, headers=None, options=None):
 
             return credential_response
 
+    async def verifier_auth_request():
+
+        did_version = options.get("did_version")
+
+        url_params = {
+            "redirect": "undefined",
+        }
+
+        authentication_requests_url = app_config["conformance"]["api"] + \
+            app_config["conformance"]["endpoints"][
+            f"verifier-auth-request-{did_version}"] + "?redirect={redirect}"
+
+        authentication_requests_response = await http_call_text(authentication_requests_url.format(**url_params), "GET", data=None, headers=headers)
+        uri_decoded = authentication_requests_response.replace("openid://", "")
+
+        if did_version == "v1":
+
+            authentication_requests_response = {
+                "request": parse_query_string_parameters_from_url(uri_decoded).get("request")[0],
+                "client_id": parse_query_string_parameters_from_url(uri_decoded).get("client_id")[0],
+                "response_type": parse_query_string_parameters_from_url(uri_decoded).get("response_type")[0],
+                "scope": parse_query_string_parameters_from_url(uri_decoded).get("scope")[0],
+                "claims": parse_query_string_parameters_from_url(uri_decoded).get("claims")[0]
+            }
+
+            return authentication_requests_response
+
+        else:
+
+            authentication_requests_response = {
+                "client_id": parse_query_string_parameters_from_url(uri_decoded).get("client_id")[0],
+                "response_type": parse_query_string_parameters_from_url(uri_decoded).get("response_type")[0],
+                "scope": parse_query_string_parameters_from_url(uri_decoded).get("scope")[0],
+                "claims": parse_query_string_parameters_from_url(uri_decoded).get("claims")[0],
+                "redirect_uri": parse_query_string_parameters_from_url(uri_decoded).get("redirect_uri")[0],
+                "nonce": parse_query_string_parameters_from_url(uri_decoded).get("nonce")[0]
+            }
+
+            return authentication_requests_response
+
+    async def verifier_auth_response():
+        jwt_vp = options.get("jwtVp")
+        client: EbsiClient = options.get("client")
+
+        authentication_response_url = app_config["conformance"]["api"] + \
+            app_config["conformance"]["endpoints"][
+            f"verifier-auth-response-{client.did_version}"]
+
+        if client.did_version == "v1":
+            payload = {
+                "id_token": {},
+                "vp_token": [
+                    {
+                        "format": "jwt_vp",
+                        "presentation": jwt_vp
+                    }
+                ]
+            }
+
+            vp_status = await http_call(authentication_response_url, "POST", data=json.dumps(payload), headers=headers)
+
+            return vp_status
+        else:
+            jwt_payload = {
+                "_vp_token": {
+                    "presentation_submission": {
+                        "id": str(uuid.uuid4()),
+                        "definition_id": "conformance_mock_vp_request",
+                        "descriptor_map": [
+                            {
+                                "id": "conformance_mock_vp",
+                                "format": "jwt_vp",
+                                "path": "$",
+                            },
+                        ],
+                    },
+                },
+            }
+
+            jwt_header = {
+                "alg": "ES256K",
+                "typ": "JWT",
+                "kid": f"{client.ebsi_did.did}#{client.eth.jwk_thumbprint}",
+            }
+
+            public_key_jwk = client.eth.public_key_to_jwk()
+
+            public_key_jwk = {
+                "kty": public_key_jwk.get("kty"),
+                "crv": public_key_jwk.get("crv"),
+                "x": public_key_jwk.get("x"),
+                "y": public_key_jwk.get("y")
+            }
+
+            jwt_header["jwk"] = public_key_jwk
+
+            private_key = client.eth.private_key
+
+            id_token = await create_jwt(
+                jwt_payload,
+                {
+                    "issuer": client.ebsi_did.did,
+                    "signer": await ES256K_signer_algorithm(private_key),
+                },
+                jwt_header,
+                exp=False,
+                canon=False
+            )
+
+            headers["Content-Type"] = "application/x-www-form-urlencoded"
+
+            payload_str = f"id_token={id_token}&vp_token={jwt_vp}"
+
+            vp_status = await http_call(authentication_response_url, "POST", data=payload_str, headers=headers)
+
+            return vp_status
+
     switcher = {
         "issuerInitiate": issuer_initiate,
         "issuerAuthorize": issuer_authorize,
         "issuerToken": issuer_token,
-        "issuerCredential": issuer_credential
+        "issuerCredential": issuer_credential,
+        "verifierAuthRequest": verifier_auth_request,
+        "verifierAuthResponse": verifier_auth_response
     }
 
     method_fn = switcher.get(method)
@@ -328,7 +453,7 @@ async def conformance(method, headers=None, options=None):
     return await method_fn()
 
 
-async def compute(method, headers, options):
+async def compute(method, headers={}, options={}):
 
     async def create_presentation():
 
@@ -391,11 +516,27 @@ async def compute(method, headers, options):
 
         return access_token
 
+    async def create_presentation_jwt():
+        credential = options.get("credential")
+        client: EbsiClient = options.get("client")
+        audience = options.get("audience")
+
+        config = {
+            "client": client,
+            "issuer": client.ebsi_did.did,
+            "signer": await ES256K_signer_algorithm(client.eth.private_key)
+        }
+
+        vp_jwt_res = await create_vp_jwt(credential, config, audience)
+
+        return vp_jwt_res
+
     switcher = {
         "createPresentation": create_presentation,
         "canonicalizeBase64url": canonicalize_base64_url,
         "verifyAuthenticationRequest": verify_authentication_request,
-        "verifySessionResponse": verify_session_response
+        "verifySessionResponse": verify_session_response,
+        "createPresentationJwt": create_presentation_jwt
     }
 
     method_fn = switcher.get(method)
