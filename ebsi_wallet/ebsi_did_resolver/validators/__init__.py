@@ -1,4 +1,3 @@
-import base58
 from ..constants import NATURAL_PERSON, LEGAL_ENTITY, EBSI_DID_SPECS, SUPPORTED_VERSIONS
 from multibase import decode
 

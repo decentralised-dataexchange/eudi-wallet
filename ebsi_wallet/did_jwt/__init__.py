@@ -5,8 +5,8 @@ import math
 
 from .util.json_canonicalize.Canonicalize import canonicalize
 from .signer_algorithm import verify_ES256K
-from src.util import pad_base64
-from src.ebsi_did_resolver import resolve
+from ..util import pad_base64
+from ..ebsi_did_resolver import resolve
 
 
 def decode_jws(jws):
@@ -15,10 +15,12 @@ def decode_jws(jws):
     assert len(parts) == 3
 
     return {
-        "header": json.loads(base64.urlsafe_b64decode(pad_base64(parts[0])).decode("utf-8")),
+        "header": json.loads(
+            base64.urlsafe_b64decode(pad_base64(parts[0])).decode("utf-8")
+        ),
         "payload": parts[1],
         "signature": parts[2],
-        "data": f"{parts[0]}.{parts[1]}"
+        "data": f"{parts[0]}.{parts[1]}",
     }
 
 
@@ -26,9 +28,11 @@ def decode_jwt(jwt):
     jws = decode_jws(jwt)
     decoded_jwt = {
         "header": jws["header"],
-        "payload": json.loads(base64.urlsafe_b64decode(pad_base64(jws["payload"])).decode("utf-8")),
+        "payload": json.loads(
+            base64.urlsafe_b64decode(pad_base64(jws["payload"])).decode("utf-8")
+        ),
         "signature": jws["signature"],
-        "data": jws["data"]
+        "data": jws["data"],
     }
 
     return decoded_jwt
@@ -49,11 +53,21 @@ async def create_jws(payload, signer, header, canon: bool = True) -> str:
         str: JWS.
     """
 
-    encoded_payload = base64.urlsafe_b64encode(
-        json.dumps(payload).encode("utf-8") if not canon else canonicalize(payload)).decode("utf-8").replace("=", "")
+    encoded_payload = (
+        base64.urlsafe_b64encode(
+            json.dumps(payload).encode("utf-8") if not canon else canonicalize(payload)
+        )
+        .decode("utf-8")
+        .replace("=", "")
+    )
 
-    encoded_header = base64.urlsafe_b64encode(
-        json.dumps(header).encode("utf-8") if not canon else canonicalize(header)).decode("utf-8").replace("=", "")
+    encoded_header = (
+        base64.urlsafe_b64encode(
+            json.dumps(header).encode("utf-8") if not canon else canonicalize(header)
+        )
+        .decode("utf-8")
+        .replace("=", "")
+    )
 
     signing_input = ".".join([encoded_header, encoded_payload])
 
@@ -63,7 +77,9 @@ async def create_jws(payload, signer, header, canon: bool = True) -> str:
     return ".".join([signing_input, signature])
 
 
-async def create_jwt(payload, options, header, exp: bool = True, canon: bool = True) -> str:
+async def create_jwt(
+    payload, options, header, exp: bool = True, canon: bool = True
+) -> str:
     """
     Creates a JWT.
 
@@ -105,11 +121,11 @@ async def verify_jwt(jwt, config):
 
     did = None
 
-    if(payload.get("iss") == "https://self-issued.me/v2"):
+    if payload.get("iss") == "https://self-issued.me/v2":
 
         assert payload.get("sub") is not None, "Missing subject"
 
-        if (payload.get("sub_jwk") is None):
+        if payload.get("sub_jwk") is None:
 
             did = payload.get("sub")
 
@@ -123,8 +139,9 @@ async def verify_jwt(jwt, config):
     did_resolution_result = await resolve(did, config)
 
     # FIXME: Only the first verification method is used to verify the signature.
-    authenticator = did_resolution_result.get(
-        "didDocument").get("verificationMethod")[0]
+    authenticator = did_resolution_result.get("didDocument").get("verificationMethod")[
+        0
+    ]
 
     # Verify the signature.
     verify = await verify_ES256K(data, signature, authenticator)

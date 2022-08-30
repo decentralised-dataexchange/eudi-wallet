@@ -1,4 +1,3 @@
-from numpy import integer
 from ..util import http_call
 from ..ebsi_did_resolver.validators import validate as validate_did
 from jsonschema import validate

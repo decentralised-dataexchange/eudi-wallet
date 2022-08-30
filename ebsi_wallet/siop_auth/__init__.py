@@ -1,15 +1,11 @@
-import json
-
-from src.ebsi_client import EbsiClient
+from ..ebsi_client import EbsiClient
 from ..ethereum import Ethereum
-from urllib import parse
 
 from .util import get_jwk, sign_did_auth_internal, aes_cbc_ecies_decrypt
-from src.did_jwt import verify_jwt
+from ..did_jwt import verify_jwt
 
 
 class Agent:
-
     def __init__(self, private_key, did_registry):
 
         # Private key associated with Ethereum EOA.
@@ -34,7 +30,9 @@ class Agent:
     def did_registry(self, did_registry):
         self._did_registry = did_registry
 
-    async def create_authentication_response(self, did, nonce, redirect_uri, eth_client: Ethereum, claims={}):
+    async def create_authentication_response(
+        self, did, nonce, redirect_uri, eth_client: Ethereum, claims={}
+    ):
         """
         Creates an authentication response.
         """
@@ -48,9 +46,7 @@ class Agent:
             "nonce": nonce,
             "sub_jwk": await get_jwk(f"{did}#key-1", eth_client),
             "did": did,
-            "claims": {
-                **claims
-            }
+            "claims": {**claims},
         }
 
         jwt = await sign_did_auth_internal(did, payload, eth_client.private_key)
@@ -59,16 +55,14 @@ class Agent:
             "urlEncoded": redirect_uri,
             "encoding": "application/x-www-form-urlencoded",
             "responseMode": "fragment",
-            "bodyEncoded": jwt
+            "bodyEncoded": jwt,
         }
 
         return url_response
 
     async def verify_authentication_request(self, jwt):
 
-        options = {
-            "registry": self.did_registry
-        }
+        options = {"registry": self.did_registry}
 
         verified_jwt = await verify_jwt(jwt, options)
 
@@ -80,10 +74,10 @@ class Agent:
 
         decrypted_payload = await aes_cbc_ecies_decrypt(ake1_enc_payload, client)
 
+        assert decrypted_payload.get("did"), "DID not found in decrypted payload"
         assert decrypted_payload.get(
-            "did"), "DID not found in decrypted payload"
-        assert decrypted_payload.get(
-            "access_token"), "Access token not found in decrypted payload"
+            "access_token"
+        ), "Access token not found in decrypted payload"
 
         decrypted_payload_nonce = decrypted_payload.get("nonce")
 
@@ -91,10 +85,7 @@ class Agent:
             assert decrypted_payload_nonce == nonce, "Nonce mismatch"
 
         # Verify the access token JWT.
-        options = {
-            "registry": self.did_registry,
-            "audience": "ebsi-core-services"
-        }
+        options = {"registry": self.did_registry, "audience": "ebsi-core-services"}
 
         await verify_jwt(decrypted_payload.get("access_token"), options)
 

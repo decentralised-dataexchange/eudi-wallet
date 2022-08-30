@@ -24,6 +24,14 @@ This repository hosts source code for Python port for EBSI wallet. This implemen
 
 Work in progress and codebased is not stable.
 
+## Installation
+
+ebsi-wallet can be installed (preferably in a `virtualenv`) using ``pip`` as follows:
+
+```bash
+   $ pip install ebsi-wallet
+```
+
 ## Contributing
 
 Feel free to improve the plugin and send us a pull request. If you found any problems, please create an issue in this repo.

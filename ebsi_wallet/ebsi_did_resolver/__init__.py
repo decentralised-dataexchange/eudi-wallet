@@ -1,4 +1,4 @@
-from src.util import http_call
+from ..util import http_call
 
 
 async def resolve(did, options):
@@ -8,5 +8,5 @@ async def resolve(did, options):
     return {
         "didDocument": did_document,
         "didDocumentMetadata": {},
-        "didResolutionMetadata": {"Content-Type": "application/did+ld+json"}
+        "didResolutionMetadata": {"Content-Type": "application/did+ld+json"},
     }
