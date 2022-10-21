@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "ebsi-wallet"
-version = "0.1.0"
+version = "0.1.1"
 description = "EBSI Python SDK"
 authors = ["George J Padayatti <george.padayatti@igrant.io>"]
 license = "MIT"
