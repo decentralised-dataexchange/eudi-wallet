@@ -25,7 +25,7 @@ console = Console()
 
 app_config = {
     "conformance": {
-        "api": "https://api.conformance.intebsi.xyz",
+        "api": "https://api.preprod.ebsi.eu",
         "endpoints": {
             "issuer-initiate-v1": "/conformance/v1/issuer-mock/initiate",
             "issuer-authorize-v1": "/conformance/v1/issuer-mock/authorize",
@@ -41,7 +41,7 @@ app_config = {
             "verifier-auth-response-v2": "/conformance/v2/verifier-mock/authentication-responses",
         },
         "onboarding": {
-            "api": "https://api.conformance.intebsi.xyz",
+            "api": "https://api.preprod.ebsi.eu",
             "endpoints": {
                 "post": {
                     "authentication-requests": "/users-onboarding/v1/authentication-requests",
@@ -51,7 +51,7 @@ app_config = {
             },
         },
         "authorisation": {
-            "api": "https://api.conformance.intebsi.xyz",
+            "api": "https://api.preprod.ebsi.eu",
             "endpoints": {
                 "post": {
                     "siop-authentication-requests": "/authorisation/v1/authentication-requests"
@@ -59,7 +59,7 @@ app_config = {
             },
         },
         "did": {
-            "api": "https://api.conformance.intebsi.xyz",
+            "api": "https://api.preprod.ebsi.eu",
             "endpoints": {"post": {"identifiers": "/did-registry/v2/identifiers"}},
         },
     }
@@ -292,7 +292,9 @@ async def conformance(method, headers=None, options=None):
             if headers:
                 headers["Content-Type"] = "application/json"
 
-            credential_url = "https://api.conformance.intebsi.xyz/conformance/v1/issuer-mock/credential"
+            credential_url = (
+                "https://api.preprod.ebsi.eu/conformance/v1/issuer-mock/credential"
+            )
 
             payload = {
                 "type": "https://api.test.intebsi.xyz/trusted-schemas-registry/v1/schemas/0x1ee207961aba4a8ba018bacf3aaa338df9884d52e993468297e775a585abe4d8",
