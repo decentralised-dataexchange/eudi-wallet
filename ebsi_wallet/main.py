@@ -1,26 +1,25 @@
-import uuid
 import asyncio
 import base64
 import json
 import secrets
-import jwt
-import urllib
 import time
+import uuid
+
 from rich.console import Console
-from .siop_auth import Agent
-from .ebsi_client import EbsiClient
-from .util import (
-    parse_query_string_parameters_from_url,
+
+from ebsi_wallet.did_jwt import create_jwt
+from ebsi_wallet.did_jwt.signer_algorithm import ES256K_signer_algorithm
+from ebsi_wallet.did_jwt.util.json_canonicalize.Canonicalize import canonicalize
+from ebsi_wallet.ebsi_client import EbsiClient
+from ebsi_wallet.siop_auth import Agent
+from ebsi_wallet.util import (
     http_call,
     http_call_text,
     http_call_text_redirects_disabled,
+    parse_query_string_parameters_from_url,
     verifiable_presentation,
 )
-from .util.verifiable_presentation import create_vp_jwt
-from .did_jwt.signer_algorithm import ES256K_signer_algorithm
-from .did_jwt.util.json_canonicalize.Canonicalize import canonicalize
-from .did_jwt import create_jwt, decode_jwt
-from .verifiable_presentation.v2 import create_verifiable_presentation_jwt
+from ebsi_wallet.util.verifiable_presentation import create_vp_jwt
 
 console = Console()
 
@@ -39,7 +38,7 @@ app_config = {
             "verifier-auth-request-v1": "/conformance/v1/verifier-mock/authentication-requests",
             "verifier-auth-request-v2": "/conformance/v2/verifier-mock/authentication-requests",
             "verifier-auth-response-v1": "/conformance/v1/verifier-mock/authentication-responses",
-            "verifier-auth-response-v2": "/conformance/v2/verifier-mock/authentication-responses"
+            "verifier-auth-response-v2": "/conformance/v2/verifier-mock/authentication-responses",
         },
         "onboarding": {
             "api": "https://api.conformance.intebsi.xyz",
@@ -47,9 +46,9 @@ app_config = {
                 "post": {
                     "authentication-requests": "/users-onboarding/v1/authentication-requests",
                     "sessions": "/users-onboarding/v1/sessions",
-                    "authentication-responses": "/users-onboarding/v1/authentication-responses"
+                    "authentication-responses": "/users-onboarding/v1/authentication-responses",
                 }
-            }
+            },
         },
         "authorisation": {
             "api": "https://api.conformance.intebsi.xyz",
@@ -57,28 +56,29 @@ app_config = {
                 "post": {
                     "siop-authentication-requests": "/authorisation/v1/authentication-requests"
                 }
-            }
+            },
         },
         "did": {
             "api": "https://api.conformance.intebsi.xyz",
-            "endpoints": {
-                "post": {
-                    "identifiers": "/did-registry/v2/identifiers"
-                }
-            }
-        }
+            "endpoints": {"post": {"identifiers": "/did-registry/v2/identifiers"}},
+        },
     }
 }
 
 
 async def authorisation(method, headers, options):
-
     async def siop_request():
-        payload = {
-            "scope": "openid did_authn"
-        }
+        payload = {"scope": "openid did_authn"}
 
-        authReq = await http_call(app_config["conformance"]["authorisation"]["api"] + app_config["conformance"]["authorisation"]["endpoints"]["post"]["siop-authentication-requests"], "POST", data=payload, headers=headers)
+        authReq = await http_call(
+            app_config["conformance"]["authorisation"]["api"]
+            + app_config["conformance"]["authorisation"]["endpoints"]["post"][
+                "siop-authentication-requests"
+            ],
+            "POST",
+            data=payload,
+            headers=headers,
+        )
 
         return authReq
 
@@ -98,7 +98,7 @@ async def authorisation(method, headers, options):
             "kty": public_key_jwk.get("kty"),
             "crv": public_key_jwk.get("crv"),
             "x": public_key_jwk.get("x"),
-            "y": public_key_jwk.get("y")
+            "y": public_key_jwk.get("y"),
         }
 
         siop_agent = Agent(private_key=client.eth.private_key, did_registry="")
@@ -108,10 +108,7 @@ async def authorisation(method, headers, options):
             nonce,
             redirect_uri,
             client.eth,
-            {
-                "encryption_key": public_key_jwk,
-                "verified_claims": verified_claims
-            }
+            {"encryption_key": public_key_jwk, "verified_claims": verified_claims},
         )
 
         updated_headers = {
@@ -120,18 +117,13 @@ async def authorisation(method, headers, options):
 
         data = did_auth_response_jwt["bodyEncoded"]
 
-        authResponses = await http_call(callback_url, "POST", data=f"id_token={data}", headers=updated_headers)
+        authResponses = await http_call(
+            callback_url, "POST", data=f"id_token={data}", headers=updated_headers
+        )
 
-        return {
-            "alg": "ES256K",
-            "nonce": nonce,
-            "response": authResponses
-        }
+        return {"alg": "ES256K", "nonce": nonce, "response": authResponses}
 
-    switcher = {
-        "siopRequest": siop_request,
-        "siopSession": siop_session
-    }
+    switcher = {"siopRequest": siop_request, "siopSession": siop_session}
 
     method_fn = switcher.get(method)
 
@@ -141,10 +133,11 @@ async def authorisation(method, headers, options):
 
 
 async def conformance(method, headers=None, options=None):
-
     async def issuer_initiate():
-        url = app_config["conformance"]["api"] + \
-            app_config["conformance"]["endpoints"]["issuer-initiate-v2"]
+        url = (
+            app_config["conformance"]["api"]
+            + app_config["conformance"]["endpoints"]["issuer-initiate-v2"]
+        )
         response = await http_call_text(url, "GET", data=None, headers=headers)
         return response
 
@@ -159,22 +152,31 @@ async def conformance(method, headers=None, options=None):
             "scope": "openid conformance_testing",
             "response_type": "code",
             "redirect_uri": redirect_uri,
-            "client_id": redirect_uri if client.did_version == "v1" else client.ebsi_did.did,
+            "client_id": redirect_uri
+            if client.did_version == "v1"
+            else client.ebsi_did.did,
             "response_mode": "post",
             "state": secrets.token_bytes(6).hex(),
         }
 
-        authorize_url = app_config["conformance"]["api"] + app_config["conformance"]["endpoints"][f"issuer-authorize-{client.did_version}"] + \
-            "?scope={scope}&response_type={response_type}&redirect_uri={redirect_uri}&client_id={client_id}&response_mode={response_mode}&state={state}"
+        authorize_url = (
+            app_config["conformance"]["api"]
+            + app_config["conformance"]["endpoints"][
+                f"issuer-authorize-{client.did_version}"
+            ]
+            + "?scope={scope}&response_type={response_type}&redirect_uri={redirect_uri}&client_id={client_id}&response_mode={response_mode}&state={state}"
+        )
 
         if client.did_version == "v2":
-            url_params["authorization_details"] = json.dumps([
-                {
-                    "type": "openid_credential",
-                    "credential_type": credential_type,
-                    "format": "jwt_vc",
-                }
-            ])
+            url_params["authorization_details"] = json.dumps(
+                [
+                    {
+                        "type": "openid_credential",
+                        "credential_type": credential_type,
+                        "format": "jwt_vc",
+                    }
+                ]
+            )
 
             authorize_url += "&authorization_details={authorization_details}"
         else:
@@ -182,19 +184,19 @@ async def conformance(method, headers=None, options=None):
             authorize_url += "&nonce={nonce}"
 
         if client.did_version == "v2":
-            issuer_authorize_response = await http_call_text_redirects_disabled(authorize_url.format(**url_params), "GET", data=None, headers=headers)
-            location = str(issuer_authorize_response).split(
-                "Location': \'")[1].split("\'")[0]
-            state = parse_query_string_parameters_from_url(
-                location).get("state")[0]
-            code = parse_query_string_parameters_from_url(
-                location).get("code")[0]
-            return {
-                "state": state,
-                "code": code
-            }
+            issuer_authorize_response = await http_call_text_redirects_disabled(
+                authorize_url.format(**url_params), "GET", data=None, headers=headers
+            )
+            location = (
+                str(issuer_authorize_response).split("Location': '")[1].split("'")[0]
+            )
+            state = parse_query_string_parameters_from_url(location).get("state")[0]
+            code = parse_query_string_parameters_from_url(location).get("code")[0]
+            return {"state": state, "code": code}
         else:
-            issuer_authorize_response = await http_call(authorize_url.format(**url_params), "GET", data=None, headers=headers)
+            issuer_authorize_response = await http_call(
+                authorize_url.format(**url_params), "GET", data=None, headers=headers
+            )
             return issuer_authorize_response
 
     async def issuer_token():
@@ -203,13 +205,15 @@ async def conformance(method, headers=None, options=None):
 
         redirect_uri = "https://localhost:3000"
 
-        token_url = app_config["conformance"]["api"] + \
-            app_config["conformance"]["endpoints"][f"issuer-token-{did_version}"]
+        token_url = (
+            app_config["conformance"]["api"]
+            + app_config["conformance"]["endpoints"][f"issuer-token-{did_version}"]
+        )
 
         payload = {
             "code": code,
             "grant_type": "authorization_code",
-            "redirect_uri": redirect_uri
+            "redirect_uri": redirect_uri,
         }
 
         if did_version == "v2":
@@ -217,14 +221,21 @@ async def conformance(method, headers=None, options=None):
             if headers:
                 headers["Content-Type"] = "application/x-www-form-urlencoded"
 
-            token_response = await http_call(token_url, "POST", data=f"code={code}&grant_type=authorization_code&redirect_uri={redirect_uri}", headers=headers)
+            token_response = await http_call(
+                token_url,
+                "POST",
+                data=f"code={code}&grant_type=authorization_code&redirect_uri={redirect_uri}",
+                headers=headers,
+            )
             return token_response
         else:
 
             if headers:
                 headers["Content-Type"] = "application/json"
 
-            token_response = await http_call(token_url, "POST", data=json.dumps(payload), headers=headers)
+            token_response = await http_call(
+                token_url, "POST", data=json.dumps(payload), headers=headers
+            )
             return token_response
 
     async def issuer_credential():
@@ -238,14 +249,9 @@ async def conformance(method, headers=None, options=None):
         jwt_payload = None
 
         if client.did_version == "v1":
-            jwt_payload = {
-                "c_nonce": c_nonce
-            }
+            jwt_payload = {"c_nonce": c_nonce}
         else:
-            jwt_payload = {
-                "nonce": c_nonce,
-                "aud": issuer_url
-            }
+            jwt_payload = {"nonce": c_nonce, "aud": issuer_url}
 
         jwt_payload["iat"] = int(time.time())
         jwt_payload["iss"] = client.ebsi_did.did
@@ -263,7 +269,7 @@ async def conformance(method, headers=None, options=None):
                 "kty": public_key_jwk.get("kty"),
                 "crv": public_key_jwk.get("crv"),
                 "x": public_key_jwk.get("x"),
-                "y": public_key_jwk.get("y")
+                "y": public_key_jwk.get("y"),
             }
 
             jwt_header["jwk"] = public_key_jwk
@@ -278,7 +284,7 @@ async def conformance(method, headers=None, options=None):
             },
             jwt_header,
             exp=False,
-            canon=False
+            canon=False,
         )
 
         if client.did_version == "v1":
@@ -295,13 +301,15 @@ async def conformance(method, headers=None, options=None):
                 "proof": {
                     "type": "JWS",
                     "verificationMethod": f"{client.ebsi_did.did}#keys-1",
-                    "jws": jws
+                    "jws": jws,
                 },
                 "grant_type": "authorization_code",
-                "redirect_uri": redirect_uri
+                "redirect_uri": redirect_uri,
             }
 
-            credential_response = await http_call(credential_url, "POST", data=json.dumps(payload), headers=headers)
+            credential_response = await http_call(
+                credential_url, "POST", data=json.dumps(payload), headers=headers
+            )
 
             return credential_response
 
@@ -310,13 +318,20 @@ async def conformance(method, headers=None, options=None):
             if headers:
                 headers["Content-Type"] = "application/x-www-form-urlencoded"
 
-            credential_url = app_config["conformance"]["api"] + \
-                app_config["conformance"]["endpoints"][
-                    f"issuer-credential-{client.did_version}"]
+            credential_url = (
+                app_config["conformance"]["api"]
+                + app_config["conformance"]["endpoints"][
+                    f"issuer-credential-{client.did_version}"
+                ]
+            )
 
-            payload_str = f"type={credential_type}&proof[proof_type]=jwt&proof[jwt]={jws}"
+            payload_str = (
+                f"type={credential_type}&proof[proof_type]=jwt&proof[jwt]={jws}"
+            )
 
-            credential_response = await http_call(credential_url, "POST", data=payload_str, headers=headers)
+            credential_response = await http_call(
+                credential_url, "POST", data=payload_str, headers=headers
+            )
 
             return credential_response
 
@@ -328,21 +343,40 @@ async def conformance(method, headers=None, options=None):
             "redirect": "undefined",
         }
 
-        authentication_requests_url = app_config["conformance"]["api"] + \
-            app_config["conformance"]["endpoints"][
-            f"verifier-auth-request-{did_version}"] + "?redirect={redirect}"
+        authentication_requests_url = (
+            app_config["conformance"]["api"]
+            + app_config["conformance"]["endpoints"][
+                f"verifier-auth-request-{did_version}"
+            ]
+            + "?redirect={redirect}"
+        )
 
-        authentication_requests_response = await http_call_text(authentication_requests_url.format(**url_params), "GET", data=None, headers=headers)
+        authentication_requests_response = await http_call_text(
+            authentication_requests_url.format(**url_params),
+            "GET",
+            data=None,
+            headers=headers,
+        )
         uri_decoded = authentication_requests_response.replace("openid://", "")
 
         if did_version == "v1":
 
             authentication_requests_response = {
-                "request": parse_query_string_parameters_from_url(uri_decoded).get("request")[0],
-                "client_id": parse_query_string_parameters_from_url(uri_decoded).get("client_id")[0],
-                "response_type": parse_query_string_parameters_from_url(uri_decoded).get("response_type")[0],
-                "scope": parse_query_string_parameters_from_url(uri_decoded).get("scope")[0],
-                "claims": parse_query_string_parameters_from_url(uri_decoded).get("claims")[0]
+                "request": parse_query_string_parameters_from_url(uri_decoded).get(
+                    "request"
+                )[0],
+                "client_id": parse_query_string_parameters_from_url(uri_decoded).get(
+                    "client_id"
+                )[0],
+                "response_type": parse_query_string_parameters_from_url(
+                    uri_decoded
+                ).get("response_type")[0],
+                "scope": parse_query_string_parameters_from_url(uri_decoded).get(
+                    "scope"
+                )[0],
+                "claims": parse_query_string_parameters_from_url(uri_decoded).get(
+                    "claims"
+                )[0],
             }
 
             return authentication_requests_response
@@ -350,12 +384,24 @@ async def conformance(method, headers=None, options=None):
         else:
 
             authentication_requests_response = {
-                "client_id": parse_query_string_parameters_from_url(uri_decoded).get("client_id")[0],
-                "response_type": parse_query_string_parameters_from_url(uri_decoded).get("response_type")[0],
-                "scope": parse_query_string_parameters_from_url(uri_decoded).get("scope")[0],
-                "claims": parse_query_string_parameters_from_url(uri_decoded).get("claims")[0],
-                "redirect_uri": parse_query_string_parameters_from_url(uri_decoded).get("redirect_uri")[0],
-                "nonce": parse_query_string_parameters_from_url(uri_decoded).get("nonce")[0]
+                "client_id": parse_query_string_parameters_from_url(uri_decoded).get(
+                    "client_id"
+                )[0],
+                "response_type": parse_query_string_parameters_from_url(
+                    uri_decoded
+                ).get("response_type")[0],
+                "scope": parse_query_string_parameters_from_url(uri_decoded).get(
+                    "scope"
+                )[0],
+                "claims": parse_query_string_parameters_from_url(uri_decoded).get(
+                    "claims"
+                )[0],
+                "redirect_uri": parse_query_string_parameters_from_url(uri_decoded).get(
+                    "redirect_uri"
+                )[0],
+                "nonce": parse_query_string_parameters_from_url(uri_decoded).get(
+                    "nonce"
+                )[0],
             }
 
             return authentication_requests_response
@@ -364,22 +410,25 @@ async def conformance(method, headers=None, options=None):
         jwt_vp = options.get("jwtVp")
         client: EbsiClient = options.get("client")
 
-        authentication_response_url = app_config["conformance"]["api"] + \
-            app_config["conformance"]["endpoints"][
-            f"verifier-auth-response-{client.did_version}"]
+        authentication_response_url = (
+            app_config["conformance"]["api"]
+            + app_config["conformance"]["endpoints"][
+                f"verifier-auth-response-{client.did_version}"
+            ]
+        )
 
         if client.did_version == "v1":
             payload = {
                 "id_token": {},
-                "vp_token": [
-                    {
-                        "format": "jwt_vp",
-                        "presentation": jwt_vp
-                    }
-                ]
+                "vp_token": [{"format": "jwt_vp", "presentation": jwt_vp}],
             }
 
-            vp_status = await http_call(authentication_response_url, "POST", data=json.dumps(payload), headers=headers)
+            vp_status = await http_call(
+                authentication_response_url,
+                "POST",
+                data=json.dumps(payload),
+                headers=headers,
+            )
 
             return vp_status
         else:
@@ -411,7 +460,7 @@ async def conformance(method, headers=None, options=None):
                 "kty": public_key_jwk.get("kty"),
                 "crv": public_key_jwk.get("crv"),
                 "x": public_key_jwk.get("x"),
-                "y": public_key_jwk.get("y")
+                "y": public_key_jwk.get("y"),
             }
 
             jwt_header["jwk"] = public_key_jwk
@@ -426,14 +475,16 @@ async def conformance(method, headers=None, options=None):
                 },
                 jwt_header,
                 exp=False,
-                canon=False
+                canon=False,
             )
 
             headers["Content-Type"] = "application/x-www-form-urlencoded"
 
             payload_str = f"id_token={id_token}&vp_token={jwt_vp}"
 
-            vp_status = await http_call(authentication_response_url, "POST", data=payload_str, headers=headers)
+            vp_status = await http_call(
+                authentication_response_url, "POST", data=payload_str, headers=headers
+            )
 
             return vp_status
 
@@ -443,7 +494,7 @@ async def conformance(method, headers=None, options=None):
         "issuerToken": issuer_token,
         "issuerCredential": issuer_credential,
         "verifierAuthRequest": verifier_auth_request,
-        "verifierAuthResponse": verifier_auth_response
+        "verifierAuthResponse": verifier_auth_response,
     }
 
     method_fn = switcher.get(method)
@@ -454,7 +505,6 @@ async def conformance(method, headers=None, options=None):
 
 
 async def compute(method, headers={}, options={}):
-
     async def create_presentation():
 
         vc = options.get("vc")
@@ -473,8 +523,8 @@ async def compute(method, headers={}, options={}):
             vc,
             {
                 "issuer": client.ebsi_did.did,
-                "signer": await ES256K_signer_algorithm(client.eth.private_key)
-            }
+                "signer": await ES256K_signer_algorithm(client.eth.private_key),
+            },
         )
 
         return vp
@@ -496,8 +546,11 @@ async def compute(method, headers={}, options={}):
         request = options.get("request")
         client: EbsiClient = options["client"]
 
-        siop_agent = Agent(private_key=client.eth.private_key,
-                           did_registry=app_config["conformance"]["did"]["api"] + app_config["conformance"]["did"]["endpoints"]["post"]["identifiers"])
+        siop_agent = Agent(
+            private_key=client.eth.private_key,
+            did_registry=app_config["conformance"]["did"]["api"]
+            + app_config["conformance"]["did"]["endpoints"]["post"]["identifiers"],
+        )
 
         await siop_agent.verify_authentication_request(request.get("request"))
 
@@ -509,10 +562,15 @@ async def compute(method, headers={}, options={}):
 
         client: EbsiClient = options.get("client")
 
-        siop_agent = Agent(private_key=client.eth.private_key,
-                           did_registry=app_config["conformance"]["did"]["api"] + app_config["conformance"]["did"]["endpoints"]["post"]["identifiers"])
+        siop_agent = Agent(
+            private_key=client.eth.private_key,
+            did_registry=app_config["conformance"]["did"]["api"]
+            + app_config["conformance"]["did"]["endpoints"]["post"]["identifiers"],
+        )
 
-        access_token = await siop_agent.verify_authentication_response(session_response.get("response"), session_response.get("nonce"), client)
+        access_token = await siop_agent.verify_authentication_response(
+            session_response.get("response"), session_response.get("nonce"), client
+        )
 
         return access_token
 
@@ -524,7 +582,7 @@ async def compute(method, headers={}, options={}):
         config = {
             "client": client,
             "issuer": client.ebsi_did.did,
-            "signer": await ES256K_signer_algorithm(client.eth.private_key)
+            "signer": await ES256K_signer_algorithm(client.eth.private_key),
         }
 
         vp_jwt_res = await create_vp_jwt(credential, config, audience)
@@ -536,7 +594,7 @@ async def compute(method, headers={}, options={}):
         "canonicalizeBase64url": canonicalize_base64_url,
         "verifyAuthenticationRequest": verify_authentication_request,
         "verifySessionResponse": verify_session_response,
-        "createPresentationJwt": create_presentation_jwt
+        "createPresentationJwt": create_presentation_jwt,
     }
 
     method_fn = switcher.get(method)
@@ -547,7 +605,6 @@ async def compute(method, headers={}, options={}):
 
 
 async def wallet(method):
-
     async def init():
 
         client = EbsiClient()
@@ -562,10 +619,7 @@ async def wallet(method):
 
         return client
 
-    switcher = {
-        "init": init,
-        "init_v2": init_v2
-    }
+    switcher = {"init": init, "init_v2": init_v2}
 
     method_fn = switcher.get(method)
 
@@ -575,13 +629,18 @@ async def wallet(method):
 
 
 async def onboarding(method, headers, options=None):
-
     async def authentication_requests():
-        payload = {
-            "scope": "ebsi users onboarding"
-        }
+        payload = {"scope": "ebsi users onboarding"}
 
-        authReq = await http_call(app_config["conformance"]["onboarding"]["api"] + app_config["conformance"]["onboarding"]["endpoints"]["post"]["authentication-requests"], "POST", data=payload, headers=headers)
+        authReq = await http_call(
+            app_config["conformance"]["onboarding"]["api"]
+            + app_config["conformance"]["onboarding"]["endpoints"]["post"][
+                "authentication-requests"
+            ],
+            "POST",
+            data=payload,
+            headers=headers,
+        )
 
         return authReq
 
@@ -590,16 +649,17 @@ async def onboarding(method, headers, options=None):
         client = options["client"]
 
         nonce = str(uuid.uuid4())
-        redirect_uri = app_config["conformance"]["onboarding"]["api"] + \
-            app_config["conformance"]["onboarding"]["endpoints"]["post"]["authentication-responses"]
+        redirect_uri = (
+            app_config["conformance"]["onboarding"]["api"]
+            + app_config["conformance"]["onboarding"]["endpoints"]["post"][
+                "authentication-responses"
+            ]
+        )
 
         siop_agent = Agent(private_key=client.eth.private_key, did_registry="")
 
         did_auth_response_jwt = await siop_agent.create_authentication_response(
-            client.ebsi_did.did,
-            nonce,
-            redirect_uri,
-            client.eth
+            client.ebsi_did.did, nonce, redirect_uri, client.eth
         )
 
         updated_headers = {
@@ -609,13 +669,15 @@ async def onboarding(method, headers, options=None):
         data = did_auth_response_jwt["bodyEncoded"]
         url = did_auth_response_jwt["urlEncoded"]
 
-        authResponses = await http_call(url, "POST", data=f"id_token={data}", headers=updated_headers)
+        authResponses = await http_call(
+            url, "POST", data=f"id_token={data}", headers=updated_headers
+        )
 
         return authResponses
 
     switcher = {
         "authenticationRequests": authentication_requests,
-        "authenticationResponses": authentication_responses
+        "authenticationResponses": authentication_responses,
     }
 
     method_fn = switcher.get(method)
@@ -631,7 +693,7 @@ async def main():
 
     headers = {
         "Conformance": str(uuid.uuid4()),
-        "Authorization": "Bearer eyJhbGciOiJFUzI1NksiLCJ0eXAiOiJKV1QifQ.eyJleHAiOjE2NTIxMDk3NzcsImlhdCI6MTY1MjEwODg3NywiaXNzIjoiZGlkOmVic2k6emNHdnFnWlRIQ3Rramd0Y0tSTDdIOGsiLCJvbmJvYXJkaW5nIjoicmVjYXB0Y2hhIiwidmFsaWRhdGVkSW5mbyI6eyJhY3Rpb24iOiJsb2dpbiIsImNoYWxsZW5nZV90cyI6IjIwMjItMDUtMDlUMTU6MDc6NTVaIiwiaG9zdG5hbWUiOiJhcHAucHJlcHJvZC5lYnNpLmV1Iiwic2NvcmUiOjAuOSwic3VjY2VzcyI6dHJ1ZX19.wWPb9xofcgeD3G9J3hShqHOMX-Quvr2kgqw_GXk9ABbYe-YngKojO76ZxkGDBuykkbIP261Gqv5KQLSnSsyRLA"
+        "Authorization": "Bearer eyJhbGciOiJFUzI1NksiLCJ0eXAiOiJKV1QifQ.eyJleHAiOjE2NTIxMDk3NzcsImlhdCI6MTY1MjEwODg3NywiaXNzIjoiZGlkOmVic2k6emNHdnFnWlRIQ3Rramd0Y0tSTDdIOGsiLCJvbmJvYXJkaW5nIjoicmVjYXB0Y2hhIiwidmFsaWRhdGVkSW5mbyI6eyJhY3Rpb24iOiJsb2dpbiIsImNoYWxsZW5nZV90cyI6IjIwMjItMDUtMDlUMTU6MDc6NTVaIiwiaG9zdG5hbWUiOiJhcHAucHJlcHJvZC5lYnNpLmV1Iiwic2NvcmUiOjAuOSwic3VjY2VzcyI6dHJ1ZX19.wWPb9xofcgeD3G9J3hShqHOMX-Quvr2kgqw_GXk9ABbYe-YngKojO76ZxkGDBuykkbIP261Gqv5KQLSnSsyRLA",
     }
 
     # Setup wallet
@@ -644,24 +706,35 @@ async def main():
     console.log("Onboarding Service -- Authentication Requests", auth_req)
 
     session_token = auth_req["session_token"].replace("openid://", "")
-    jwt_auth_req = parse_query_string_parameters_from_url(
-        session_token).get("request")[0]
+    jwt_auth_req = parse_query_string_parameters_from_url(session_token).get("request")[
+        0
+    ]
     assert jwt_auth_req is not None, "No JWT authentication request found"
 
     headers = {
         "Authorization": f"Bearer {jwt_auth_req}",
-        "Content-Type": "application/x-www-form-urlencoded"
+        "Content-Type": "application/x-www-form-urlencoded",
     }
 
     # Authentication responses
-    vc = await onboarding("authenticationResponses", headers, options={"client": client, "jwt_auth_req": jwt_auth_req})
+    vc = await onboarding(
+        "authenticationResponses",
+        headers,
+        options={"client": client, "jwt_auth_req": jwt_auth_req},
+    )
     console.log("Onboarding Service -- Authentication Responses", vc)
 
     # Get access token
-    vp = await compute("createPresentation", None, options={"client": client, "vc": json.dumps(vc["verifiableCredential"])})
+    vp = await compute(
+        "createPresentation",
+        None,
+        options={"client": client, "vc": json.dumps(vc["verifiableCredential"])},
+    )
     console.log("Onboarding Service -- Create Presentation", vp)
 
-    vp_base64 = await compute("canonicalizeBase64url", None, options={"vp": json.dumps(vp)})
+    vp_base64 = await compute(
+        "canonicalizeBase64url", None, options={"vp": json.dumps(vp)}
+    )
     console.log("Onboarding Service -- Canonicalize Base64 URL", vp_base64)
 
     headers = {
@@ -673,25 +746,45 @@ async def main():
 
     uri_decoded = siop_auth_request["uri"].replace("openid://", "")
     siop_auth_request_prepared = {
-        "request": parse_query_string_parameters_from_url(uri_decoded).get("request")[0],
-        "client_id": parse_query_string_parameters_from_url(uri_decoded).get("client_id")[0]
+        "request": parse_query_string_parameters_from_url(uri_decoded).get("request")[
+            0
+        ],
+        "client_id": parse_query_string_parameters_from_url(uri_decoded).get(
+            "client_id"
+        )[0],
     }
 
-    callback_url = await compute("verifyAuthenticationRequest", None, {"client": client, "request": siop_auth_request_prepared})
-    console.log(
-        "Authorisation Service -- Verify Authentication Request", callback_url)
+    callback_url = await compute(
+        "verifyAuthenticationRequest",
+        None,
+        {"client": client, "request": siop_auth_request_prepared},
+    )
+    console.log("Authorisation Service -- Verify Authentication Request", callback_url)
 
     headers = {
         "Authorization": f"Bearer {jwt_auth_req}",
-        "Content-Type": "application/x-www-form-urlencoded"
+        "Content-Type": "application/x-www-form-urlencoded",
     }
 
-    session_response = await authorisation("siopSession", headers, options={"client": client, "callback_url": callback_url, "verified_claims": vp_base64})
+    session_response = await authorisation(
+        "siopSession",
+        headers,
+        options={
+            "client": client,
+            "callback_url": callback_url,
+            "verified_claims": vp_base64,
+        },
+    )
     console.log("Authorisation Service -- Siop Session", session_response)
 
-    access_token = await compute("verifySessionResponse", None, {"client": client, "session_response": session_response})
+    access_token = await compute(
+        "verifySessionResponse",
+        None,
+        {"client": client, "session_response": session_response},
+    )
     console.log(
-        "Authorisation Service -- Verify Session Response -- Access Token", access_token)
+        "Authorisation Service -- Verify Session Response -- Access Token", access_token
+    )
 
 
 if __name__ == "__main__":

@@ -1,13 +1,11 @@
-import sslcrypto
-import struct
 import hmac
 import json
 
-from ..ethereum import Ethereum
-from ..did_jwt import create_jwt, decode_jwt
-from ..did_jwt.signer_algorithm import ES256K_signer_algorithm
-
+import sslcrypto
 from coincurve import PublicKey
+from ebsi_wallet.did_jwt import create_jwt, decode_jwt
+from ebsi_wallet.did_jwt.signer_algorithm import ES256K_signer_algorithm
+from ebsi_wallet.ethereum import Ethereum
 
 
 def get_audience(jwt):
@@ -27,10 +25,7 @@ async def get_jwk(kid: str, eth_client: Ethereum) -> dict:
     Returns the JWK for the given kid.
     """
 
-    return {
-        **eth_client.public_key_to_jwk(),
-        "kid": kid
-    }
+    return {**eth_client.public_key_to_jwk(), "kid": kid}
 
 
 async def sign_did_auth_internal(did, payload, private_key):
@@ -46,10 +41,14 @@ async def sign_did_auth_internal(did, payload, private_key):
 
     SELF_ISSUED_V2 = "https://self-issued.me/v2"
 
-    response = await create_jwt({**payload}, {
-        "issuer": SELF_ISSUED_V2,
-        "signer": await ES256K_signer_algorithm(private_key),
-    }, header)
+    response = await create_jwt(
+        {**payload},
+        {
+            "issuer": SELF_ISSUED_V2,
+            "signer": await ES256K_signer_algorithm(private_key),
+        },
+        header,
+    )
 
     return response
 
@@ -70,13 +69,12 @@ async def aes_cbc_ecies_decrypt(ake1_enc_payload, client):
         "iv": iv.hex(),
         "ephermal_public_key": cc_ephermal_public_key.format(False).hex(),
         "mac": mac.hex(),
-        "ciphertext": ciphertext.hex()
+        "ciphertext": ciphertext.hex(),
     }
 
     curve = sslcrypto.ecc.get_curve("secp256k1")
 
-    ecdh = curve.derive(private_key, bytes.fromhex(
-        enc_jwe.get("ephermal_public_key")))
+    ecdh = curve.derive(private_key, bytes.fromhex(enc_jwe.get("ephermal_public_key")))
     key = curve._digest(ecdh, "sha512")
 
     k_enc_len = curve._aes.get_algo_key_length("aes-256-cbc")
@@ -84,8 +82,11 @@ async def aes_cbc_ecies_decrypt(ake1_enc_payload, client):
         raise ValueError("Too short digest")
     k_enc, k_mac = key[:k_enc_len], key[k_enc_len:]
 
-    orig_ciphertext = bytes.fromhex(enc_jwe.get("iv")) + bytes.fromhex(
-        enc_jwe.get("ephermal_public_key")) + bytes.fromhex(enc_jwe.get("ciphertext"))
+    orig_ciphertext = (
+        bytes.fromhex(enc_jwe.get("iv"))
+        + bytes.fromhex(enc_jwe.get("ephermal_public_key"))
+        + bytes.fromhex(enc_jwe.get("ciphertext"))
+    )
     tag = bytes.fromhex(enc_jwe.get("mac"))
 
     # Verify MAC tag
@@ -96,7 +97,8 @@ async def aes_cbc_ecies_decrypt(ake1_enc_payload, client):
     if not hmac.compare_digest(tag, expected_tag):
         raise ValueError("Invalid MAC tag")
 
-    decrypted = curve._aes.decrypt(ciphertext, bytes.fromhex(
-        enc_jwe.get("iv")), k_enc, algo="aes-256-cbc")
+    decrypted = curve._aes.decrypt(
+        ciphertext, bytes.fromhex(enc_jwe.get("iv")), k_enc, algo="aes-256-cbc"
+    )
 
     return json.loads(decrypted.decode("utf-8"))

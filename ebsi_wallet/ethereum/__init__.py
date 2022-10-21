@@ -1,14 +1,13 @@
+import json
 import secrets
 import typing
-import json
 
-from sha3 import keccak_256
-from coincurve import PublicKey, PrivateKey
+from coincurve import PrivateKey, PublicKey
 from jwcrypto import jwk
+from sha3 import keccak_256
 
 
 class Ethereum:
-
     def __init__(self):
 
         # Ethereum private keys are 32 bytes long.
@@ -18,8 +17,9 @@ class Ethereum:
         # Uncompressed public key is 65 bytes long.
         # [1:] is for stripping out the byte that represents compressed or uncompressed format.
         # After stripping, size becomes 64 bytes long.
-        self._public_key = PublicKey.from_valid_secret(
-            self._private_key).format(compressed=False)[1:]
+        self._public_key = PublicKey.from_valid_secret(self._private_key).format(
+            compressed=False
+        )[1:]
 
         # Ethereum address is 20 bytes long.
         # Address is the rightmost 20 bytes of the public key keccak-256 hash.

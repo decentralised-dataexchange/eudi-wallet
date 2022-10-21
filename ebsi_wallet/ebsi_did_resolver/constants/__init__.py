@@ -6,8 +6,5 @@ EBSI_DID_SPECS = {
         "VERSION_ID": 0x01,
         "BYTE_LENGTH": 16,
     },
-    NATURAL_PERSON: {
-        "VERSION_ID": 0x02,
-        "BYTE_LENGTH": 32
-    }
+    NATURAL_PERSON: {"VERSION_ID": 0x02, "BYTE_LENGTH": 32},
 }

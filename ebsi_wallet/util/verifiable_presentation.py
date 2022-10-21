@@ -2,11 +2,11 @@ import base64
 import json
 import uuid
 
-from ..ebsi_client import EbsiClient
-from ..did_jwt import create_jwt
-from ..verifiable_presentation import create_verifiable_presentation
-from ..verifiable_presentation.v2 import create_verifiable_presentation_jwt
-from ..util import pad_base64
+from ebsi_wallet.did_jwt import create_jwt
+from ebsi_wallet.ebsi_client import EbsiClient
+from ebsi_wallet.util import pad_base64
+from ebsi_wallet.verifiable_presentation import create_verifiable_presentation
+from ebsi_wallet.verifiable_presentation.v2 import create_verifiable_presentation_jwt
 
 
 def extract_iat_from_jwt(jwt):
@@ -26,27 +26,24 @@ async def create_vp(client, alg, vc, config):
     required_proof = {
         "type": "EcdsaSecp256k1Signature2019",
         "proofPurpose": "assertionMethod",
-        "verificationMethod": f"{config['issuer']}#keys-1"
+        "verificationMethod": f"{config['issuer']}#keys-1",
     }
 
     presentation = {
         "@context": ["https://www.w3.org/2018/credentials/v1"],
         "type": "VerifiablePresentation",
         "verifiableCredential": [vc],
-        "holder": config['issuer'],
+        "holder": config["issuer"],
     }
 
     vp_jwt = await create_jwt(
         presentation,
-        {
-            "issuer": config['issuer'],
-            "signer": config["signer"]
-        },
+        {"issuer": config["issuer"], "signer": config["signer"]},
         {
             "alg": alg,
             "typ": "JWT",
-            "kid": f"{options['resolver']}/{config['issuer']}#keys-1"
-        }
+            "kid": f"{options['resolver']}/{config['issuer']}#keys-1",
+        },
     )
     vp_jwt_parts = vp_jwt.split(".")
 
@@ -56,11 +53,7 @@ async def create_vp(client, alg, vc, config):
         "iat": extract_iat_from_jwt(vp_jwt),
     }
 
-    return await create_verifiable_presentation(
-        presentation,
-        required_proof,
-        signature
-    )
+    return await create_verifiable_presentation(presentation, required_proof, signature)
 
 
 async def create_vp_jwt(vc, config, audience=None):
@@ -70,10 +63,7 @@ async def create_vp_jwt(vc, config, audience=None):
 
     if client.did_version == "v1":
 
-        payload = {
-            "nonce": str(uuid.uuid4()),
-            "vc": vc
-        }
+        payload = {"nonce": str(uuid.uuid4()), "vc": vc}
 
         options = {
             "resolver": "https://api.conformance.intebsi.xyz/did-registry/v2/identifiers",
@@ -86,19 +76,16 @@ async def create_vp_jwt(vc, config, audience=None):
                 "alg": "ES256K",
                 "issuer": config["issuer"],
                 "signer": config["signer"],
-                "canonicalize": True
+                "canonicalize": True,
             },
             {
                 "alg": "ES256K",
                 "typ": "JWT",
-                "kid":  f"{options['resolver']}/{config['issuer']}#keys-1"
-            }
+                "kid": f"{options['resolver']}/{config['issuer']}#keys-1",
+            },
         )
 
-        return {
-            "jwtVp": vp_jwt,
-            "payload": payload
-        }
+        return {"jwtVp": vp_jwt, "payload": payload}
 
     else:
 
@@ -107,7 +94,7 @@ async def create_vp_jwt(vc, config, audience=None):
             "kid": client.eth.jwk_thumbprint,
             "privateKeyJwk": client.eth.private_key_to_jwk(),
             "publicKeyJwk": client.eth.public_key_to_jwk(),
-            "alg": "ES256K"
+            "alg": "ES256K",
         }
 
         payload = {
@@ -115,16 +102,11 @@ async def create_vp_jwt(vc, config, audience=None):
             "@context": ["https://www.w3.org/2018/credentials/v1"],
             "type": ["VerifiablePresentation"],
             "holder": client.ebsi_did.did,
-            "verifiableCredential": [
-                vc
-            ]
+            "verifiableCredential": [vc],
         }
 
-        vp_jwt = await create_verifiable_presentation_jwt(payload, issuer, audience, {
-            "client": client
-        })
+        vp_jwt = await create_verifiable_presentation_jwt(
+            payload, issuer, audience, {"client": client}
+        )
 
-        return {
-            "jwtVp": vp_jwt,
-            "payload": payload
-        }
+        return {"jwtVp": vp_jwt, "payload": payload}

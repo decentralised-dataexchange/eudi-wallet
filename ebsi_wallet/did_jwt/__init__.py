@@ -1,12 +1,12 @@
-import time
 import base64
 import json
 import math
+import time
 
-from .util.json_canonicalize.Canonicalize import canonicalize
-from .signer_algorithm import verify_ES256K
-from ..util import pad_base64
-from ..ebsi_did_resolver import resolve
+from ebsi_wallet.did_jwt.signer_algorithm import verify_ES256K
+from ebsi_wallet.did_jwt.util.json_canonicalize.Canonicalize import canonicalize
+from ebsi_wallet.ebsi_did_resolver import resolve
+from ebsi_wallet.util import pad_base64
 
 
 def decode_jws(jws):

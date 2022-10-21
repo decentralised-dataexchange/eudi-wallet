@@ -1,7 +1,9 @@
 import time
-from ...ebsi_client import EbsiClient
-from ...did_jwt import create_jwt
-from ...did_jwt.signer_algorithm import ES256K_signer_algorithm
+
+from ebsi_wallet.did_jwt import create_jwt
+from ebsi_wallet.did_jwt.signer_algorithm import ES256K_signer_algorithm
+from ebsi_wallet.ebsi_client import EbsiClient
+
 
 async def create_verifiable_presentation_jwt(payload, holder, audience, options={}):
 
@@ -19,7 +21,7 @@ async def create_verifiable_presentation_jwt(payload, holder, audience, options=
         "exp": exp,
         "iat": iat,
         "aud": audience,
-        "vp": payload
+        "vp": payload,
     }
 
     vp_jwt_header = {
@@ -34,11 +36,11 @@ async def create_verifiable_presentation_jwt(payload, holder, audience, options=
             "kty": holder["publicKeyJwk"].get("kty"),
             "crv": holder["publicKeyJwk"].get("crv"),
             "x": holder["publicKeyJwk"].get("x"),
-            "y": holder["publicKeyJwk"].get("y")
+            "y": holder["publicKeyJwk"].get("y"),
         }
 
         vp_jwt_header["jwk"] = public_key_jwk
-    
+
     private_key = client.eth.private_key
 
     jws = await create_jwt(
@@ -49,7 +51,7 @@ async def create_verifiable_presentation_jwt(payload, holder, audience, options=
         },
         vp_jwt_header,
         exp=False,
-        canon=False
+        canon=False,
     )
 
     return jws

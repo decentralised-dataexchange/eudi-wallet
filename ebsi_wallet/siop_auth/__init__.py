@@ -1,8 +1,11 @@
-from ..ebsi_client import EbsiClient
-from ..ethereum import Ethereum
-
-from .util import get_jwk, sign_did_auth_internal, aes_cbc_ecies_decrypt
-from ..did_jwt import verify_jwt
+from ebsi_wallet.did_jwt import verify_jwt
+from ebsi_wallet.ebsi_client import EbsiClient
+from ebsi_wallet.ethereum import Ethereum
+from ebsi_wallet.siop_auth.util import (
+    aes_cbc_ecies_decrypt,
+    get_jwk,
+    sign_did_auth_internal,
+)
 
 
 class Agent:

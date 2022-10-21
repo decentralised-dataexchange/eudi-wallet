@@ -1,7 +1,7 @@
-from ..util import http_call
-from ..ebsi_did_resolver.validators import validate as validate_did
+from ebsi_wallet.ebsi_did_resolver.validators import validate as validate_did
+from ebsi_wallet.util import http_call
 from jsonschema import validate
-from jsonschema.exceptions import ValidationError, SchemaError
+from jsonschema.exceptions import SchemaError, ValidationError
 
 
 async def validate_schema(value, schema_url):
@@ -37,7 +37,8 @@ async def validate_context(context):
     # validate if first element of the array is 'https://www.w3.org/2018/credentials/v1'
     if context[0] != "https://www.w3.org/2018/credentials/v1":
         raise Exception(
-            "The first URI in '@context' must be 'https://www.w3.org/2018/credentials/v1'")
+            "The first URI in '@context' must be 'https://www.w3.org/2018/credentials/v1'"
+        )
 
 
 async def validate_type(typ: list):
@@ -52,20 +53,29 @@ async def validate_type(typ: list):
 
     # validate if first element of the array is 'VerifiablePresentation'
     if typ[0] != "VerifiablePresentation":
-        raise Exception(
-            "The first type must be 'VerifiablePresentation'")
+        raise Exception("The first type must be 'VerifiablePresentation'")
 
 
-async def validate_holder(payload, holder, kid, resolver=None, skip_validation=True, proof_purpose="authentication", config={}):
+async def validate_holder(
+    payload,
+    holder,
+    kid,
+    resolver=None,
+    skip_validation=True,
+    proof_purpose="authentication",
+    config={},
+):
 
     version = validate_did(holder)
 
-    payload_holder = payload['holder']
-    assert payload_holder == holder, f"payload.holder '{payload_holder}' and holder '{holder}' does not match"
+    payload_holder = payload["holder"]
+    assert (
+        payload_holder == holder
+    ), f"payload.holder '{payload_holder}' and holder '{holder}' does not match"
 
     assert isinstance(kid, str), "kid is required"
 
-    assert '#' in kid, "kid doesn't contain #"
+    assert "#" in kid, "kid doesn't contain #"
 
     assert kid.split("#")[0] == holder, "did and kid doesn't match"
 
@@ -75,6 +85,7 @@ async def validate_holder(payload, holder, kid, resolver=None, skip_validation=T
 
     return version
 
+
 async def validate_timestamp(val):
     assert isinstance(val, int)
     assert val <= 100000000000, "val is not a unix timestamp in seconds"
@@ -82,4 +93,3 @@ async def validate_timestamp(val):
 
 async def validate_credential_jwt(vc_jwt, holder, options={}):
     assert isinstance(vc_jwt, str)
-    

@@ -1,9 +1,8 @@
-from ..ethereum import Ethereum
-from ..ebsi_did import EbsiDid
+from ebsi_wallet.ebsi_did import EbsiDid
+from ebsi_wallet.ethereum import Ethereum
 
 
 class EbsiClient:
-
     def __init__(self, did_version: str = "v1") -> None:
 
         self._ebsi_did = EbsiDid(did_version)
@@ -31,7 +30,11 @@ class EbsiClient:
                     "id": f"{self._ebsi_did.did}#keys-1",
                     "type": "Secp256k1VerificationKey2018",
                     "controller": f"{self._ebsi_did.did}",
-                    "publicKeyJwk": {key: value for key, value in self._eth.public_key_to_jwk().items() if key != "kid"}
+                    "publicKeyJwk": {
+                        key: value
+                        for key, value in self._eth.public_key_to_jwk().items()
+                        if key != "kid"
+                    },
                 }
             ],
             "authentication": [

@@ -1,4 +1,4 @@
-from ..util import http_call
+from ebsi_wallet.util import http_call
 
 
 async def resolve(did, options):

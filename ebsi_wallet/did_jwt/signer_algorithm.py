@@ -1,9 +1,10 @@
-import hashlib
 import base64
-from .util import to_jose
-from eth_keys import KeyAPI
-from ..util import pad_base64
+import hashlib
+
 from coincurve.keys import PublicKey
+from ebsi_wallet.did_jwt.util import to_jose
+from ebsi_wallet.util import pad_base64
+from eth_keys import KeyAPI
 
 
 def to_signature_object(signature):
