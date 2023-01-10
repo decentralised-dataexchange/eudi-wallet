@@ -25,7 +25,7 @@ console = Console()
 
 app_config = {
     "conformance": {
-        "api": "https://api.preprod.ebsi.eu",
+        "api": "https://api-conformance.ebsi.eu",
         "endpoints": {
             "issuer-initiate-v1": "/conformance/v1/issuer-mock/initiate",
             "issuer-authorize-v1": "/conformance/v1/issuer-mock/authorize",
@@ -41,7 +41,7 @@ app_config = {
             "verifier-auth-response-v2": "/conformance/v2/verifier-mock/authentication-responses",
         },
         "onboarding": {
-            "api": "https://api.preprod.ebsi.eu",
+            "api": "https://api-conformance.ebsi.eu",
             "endpoints": {
                 "post": {
                     "authentication-requests": "/users-onboarding/v1/authentication-requests",
@@ -51,7 +51,7 @@ app_config = {
             },
         },
         "authorisation": {
-            "api": "https://api.preprod.ebsi.eu",
+            "api": "https://api-conformance.ebsi.eu",
             "endpoints": {
                 "post": {
                     "siop-authentication-requests": "/authorisation/v1/authentication-requests"
@@ -59,7 +59,7 @@ app_config = {
             },
         },
         "did": {
-            "api": "https://api.preprod.ebsi.eu",
+            "api": "https://api-conformance.ebsi.eu",
             "endpoints": {"post": {"identifiers": "/did-registry/v2/identifiers"}},
         },
     }
@@ -293,7 +293,7 @@ async def conformance(method, headers=None, options=None):
                 headers["Content-Type"] = "application/json"
 
             credential_url = (
-                "https://api.preprod.ebsi.eu/conformance/v1/issuer-mock/credential"
+                "https://api-conformance.ebsi.eu/conformance/v1/issuer-mock/credential"
             )
 
             payload = {
