@@ -31,14 +31,20 @@ app_config = {
             "issuer-authorize-v1": "/conformance/v1/issuer-mock/authorize",
             "issuer-initiate-v2": "/conformance/v2/issuer-mock/initiate",
             "issuer-authorize-v2": "/conformance/v2/issuer-mock/authorize",
+            "issuer-initiate-v3": "/conformance/v3/issuer-mock/initiate",
+            "issuer-authorize-v3": "/conformance/v3/issuer-mock/authorize",
             "issuer-token-v1": "/conformance/v1/issuer-mock/token",
             "issuer-token-v2": "/conformance/v2/issuer-mock/token",
+            "issuer-token-v3": "/conformance/v3/issuer-mock/token",
             "issuer-credential-v1": "/conformance/v1/issuer-mock/credential",
             "issuer-credential-v2": "/conformance/v2/issuer-mock/credential",
+            "issuer-credential-v3": "/conformance/v3/issuer-mock/credential",
             "verifier-auth-request-v1": "/conformance/v1/verifier-mock/authentication-requests",
             "verifier-auth-request-v2": "/conformance/v2/verifier-mock/authentication-requests",
+            "verifier-auth-request-v3": "/conformance/v3/verifier-mock/authentication-requests",
             "verifier-auth-response-v1": "/conformance/v1/verifier-mock/authentication-responses",
             "verifier-auth-response-v2": "/conformance/v2/verifier-mock/authentication-responses",
+            "verifier-auth-response-v3": "/conformance/v3/verifier-mock/authentication-responses",
         },
         "onboarding": {
             "api": "https://api-conformance.ebsi.eu",
@@ -133,10 +139,33 @@ async def authorisation(method, headers, options):
 
 
 async def conformance(method, headers=None, options=None):
+
+    async def issuer_initiate_v3():
+        credential_type = options.get("credential_type", "diploma")
+        flow_type = options.get("flow_type", "cross-device")
+        conformance = options.get("conformance")
+
+        url = (
+            app_config["conformance"]["api"]
+            + app_config["conformance"]["endpoints"]["issuer-initiate-v3"]
+            + f"?credential_type={credential_type}"
+            + f"&flow_type={flow_type}"
+            + f"&conformance={conformance}"
+        )
+        response = await http_call_text(url, "GET", data=None, headers=headers)
+        return response
+
     async def issuer_initiate():
+        credential_type = options.get("credential_type", "diploma")
+        flow_type = options.get("flow_type", "cross-device")
+        conformance = options.get("conformance")
+
         url = (
             app_config["conformance"]["api"]
             + app_config["conformance"]["endpoints"]["issuer-initiate-v2"]
+            + f"?credential_type={credential_type}"
+            + f"&flow_type={flow_type}"
+            + f"&conformance={conformance}"
         )
         response = await http_call_text(url, "GET", data=None, headers=headers)
         return response
@@ -492,6 +521,7 @@ async def conformance(method, headers=None, options=None):
 
     switcher = {
         "issuerInitiate": issuer_initiate,
+        "issuerInitiateV3": issuer_initiate_v3,
         "issuerAuthorize": issuer_authorize,
         "issuerToken": issuer_token,
         "issuerCredential": issuer_credential,
