@@ -18,11 +18,11 @@
 
 ## About
 
-This repository hosts source code for Python port for EBSI wallet. This implementation uses ES256K (ECDSA) signing algorithm. 
+This repository hosts the source code for the Python port for the EBSI wallet. This implementation uses ES256K (ECDSA) signing algorithm. 
 
 ## Release Status
 
-Work in progress and codebased is not stable.
+Work in progress, and the codebase is not stable.
 
 ## Installation
 
@@ -41,7 +41,7 @@ Feel free to improve the plugin and send us a pull request. If you found any pro
 1. EBSI Wallet Conformance Testing - https://ec.europa.eu/digital-building-blocks/wikis/display/EBSIDOC/EBSI+Wallet+Conformance+Testing
 
 ## Licensing
-Copyright (c) 2021-23 LCubed AB (iGrant.io), Sweden
+Copyright (c) 2022-25 LCubed AB (iGrant.io), Sweden
 
 Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with the License.
 
