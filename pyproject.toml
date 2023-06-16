@@ -18,6 +18,8 @@ base58 = "1.0.3"
 eth-keys = "^0.4.0"
 PyJWT = "^2.4.0"
 pysha3 = "^1.0.2"
+multiformats = "^0.2.1"
+cryptography = "^41.0.1"
 
 [tool.poetry.dev-dependencies]
 jupyter = "^1.0.0"
