@@ -69,3 +69,22 @@ class KeyDid:
         token.make_signed_token(self._key)
 
         return token.serialize()
+    
+    def generate_credential_request(self, issuer_uri: str, nonce: str) -> str:
+        header = {
+            "typ": "openid4vci-proof+jwt",
+            "alg": "ES256",
+            "kid": f'{self._did}#{self._method_specific_id}'
+        }
+        payload = {
+            "iss": self._did,
+            "iat": int(time.time()),
+            "aud": issuer_uri,
+            "exp": int(time.time()) + 86400,
+            "nonce": nonce
+        }
+        token = jwt.JWT(header=header, claims=payload)
+        token.make_signed_token(self._key)
+
+        return token.serialize()
+    

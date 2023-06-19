@@ -6,6 +6,8 @@ import dataclasses
 import urllib.parse
 import hashlib
 import base64
+import secrets
+import string
 from dataclasses import dataclass
 from coincurve import PublicKey
 from ebsi_wallet.did_jwt import create_jwt, decode_jwt
@@ -277,12 +279,22 @@ def get_authorization_response_query_params(authorization_response_uri: str) -> 
                                             scope, nonce, 
                                             request_uri)
 
+def generate_code_verifier(length=128):
+    valid_characters = string.ascii_letters + string.digits + "-._~"
+    code_verifier = ''.join(secrets.choice(valid_characters) for _ in range(length))
+    return code_verifier
 
 def generate_code_challenge(code_verifier: str) -> str:
-    code_verifier_bytes = code_verifier.encode()
-    code_challenge_bytes = hashlib.sha256(code_verifier_bytes).digest()
-    code_challenge = base64.urlsafe_b64encode(code_challenge_bytes).decode()
-    return code_challenge
+    if len(code_verifier) < 43 or len(code_verifier) > 128:
+        raise ValueError("code_verifier must be between 43 and 128 characters long.")
+    valid_characters = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+    if not all(char in valid_characters for char in code_verifier):
+        raise ValueError("code_verifier contains invalid characters.")
+    code_verifier_bytes = code_verifier.encode("utf-8")
+    sha256_hash = hashlib.sha256(code_verifier_bytes).digest()
+    base64url_encoded = base64.urlsafe_b64encode(sha256_hash).rstrip(b"=").decode("utf-8")
+
+    return base64url_encoded
 
 async def send_id_token_response(auth_server_direct_post_uri: str,
                                 id_token: str,
@@ -296,10 +308,19 @@ async def send_id_token_response(auth_server_direct_post_uri: str,
                                                                         headers=headers)
     return issuer_authorize_response
 
+@dataclass
+class AccessTokenResponse:
+    access_token: str
+    token_type: str
+    expires_in: int
+    id_token: str
+    c_nonce: str
+    c_nonce_expires_in: int
+
 async def exchange_auth_code_for_access_token(token_uri: str,
                                               client_id: str,
                                               code: str,
-                                              code_verifier: str) -> str:
+                                              code_verifier: str) -> AccessTokenResponse:
     headers = {
         "Content-Type": "application/x-www-form-urlencoded"
     }
@@ -311,9 +332,31 @@ async def exchange_auth_code_for_access_token(token_uri: str,
         "code_verifier": code_verifier
     }
     encoded_params = urllib.parse.urlencode(query_params)
-    print(encoded_params)
     access_token_response = await http_call(token_uri,
                                                 "POST",
                                                 data=encoded_params,
                                                 headers=headers)
-    return access_token_response
+    return AccessTokenResponse(**access_token_response)
+
+async def send_credential_request(credentials_uri: str,
+                                  access_token: str,
+                                  credential_request_jwt: str):
+
+    headers = {
+        "Authorization": f"Bearer {access_token}",
+        "Content-Type": "application/json"
+    }
+
+    data = {
+        "types": ["VerifiableCredential","VerifiableAttestation","CTWalletCrossInTime"],
+        "format": "jwt_vc",
+        "proof": {
+            "proof_type": "jwt",
+            "jwt": credential_request_jwt
+        }
+    }
+    print(access_token)
+
+    credential_response = await http_call(credentials_uri, "POST", data=json.dumps(data),headers=headers)
+
+    return credential_response
