@@ -368,6 +368,7 @@ async def exchange_pre_authorized_code_for_access_token(token_uri: str, user_pin
                                                 "POST",
                                                 data=encoded_params,
                                                 headers=headers)
+    print(access_token_response)
     return AccessTokenResponse(**access_token_response)
 
 async def send_credential_request(credentials_uri: str,
