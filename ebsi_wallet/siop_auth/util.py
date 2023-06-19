@@ -8,6 +8,7 @@ import hashlib
 import base64
 import secrets
 import string
+from enum import Enum
 from dataclasses import dataclass
 from coincurve import PublicKey
 from ebsi_wallet.did_jwt import create_jwt, decode_jwt
@@ -235,17 +236,30 @@ async def perform_authorization(authorization_server_uri: str,
     return issuer_authorize_response
 
 
-async def fetch_credential_offer(client_id):
+class CredentialTypes(Enum):
+    CTWalletSameInTime = 'CTWalletSameInTime'
+    CTWalletCrossInTime = 'CTWalletCrossInTime'
+    CTWalletSameDeferred = 'CTWalletSameDeferred'
+    CTWalletCrossDeferred = 'CTWalletCrossDeferred'
+    CTWalletSamePreAuthorised = 'CTWalletSamePreAuthorised'
+    CTWalletCrossPreAuthorised = 'CTWalletCrossPreAuthorised'
+
+
+async def fetch_credential_offer(client_id: str, credential_type: CredentialTypes):
     url = 'https://api-conformance.ebsi.eu/conformance/v3/issuer-mock/initiate-credential-offer'
     params = {
-        'credential_type': 'CTWalletCrossInTime',
+        'credential_type': credential_type.value,
         'client_id': client_id,
         'credential_offer_endpoint': 'openid-credential-offer://'
     }
     encoded_params = urllib.parse.urlencode(params)
     url = f'{url}?{encoded_params}'
 
-    resp = await http_call_text(url, "GET")
+    if credential_type in (CredentialTypes.CTWalletCrossInTime, CredentialTypes.CTWalletCrossDeferred, CredentialTypes.CTWalletCrossPreAuthorised):
+        resp = await http_call_text(url, "GET")
+    else:
+        resp = await http_call_text_redirects_disabled(url, "GET")
+        resp = str(resp).split("Location': '")[1].split("'")[0]
     return resp
 
 @dataclass
@@ -338,9 +352,28 @@ async def exchange_auth_code_for_access_token(token_uri: str,
                                                 headers=headers)
     return AccessTokenResponse(**access_token_response)
 
+
+async def exchange_pre_authorized_code_for_access_token(token_uri: str, user_pin: str, pre_authorized_code: str) -> AccessTokenResponse:
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+
+    query_params = {
+        "grant_type": "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+        "user_pin": user_pin,
+        "pre-authorized_code": pre_authorized_code
+    }
+    encoded_params = urllib.parse.urlencode(query_params)
+    access_token_response = await http_call(token_uri,
+                                                "POST",
+                                                data=encoded_params,
+                                                headers=headers)
+    return AccessTokenResponse(**access_token_response)
+
 async def send_credential_request(credentials_uri: str,
                                   access_token: str,
-                                  credential_request_jwt: str):
+                                  credential_request_jwt: str,
+                                  credential_types: typing.List[str]):
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -348,15 +381,24 @@ async def send_credential_request(credentials_uri: str,
     }
 
     data = {
-        "types": ["VerifiableCredential","VerifiableAttestation","CTWalletCrossInTime"],
+        "types": credential_types,
         "format": "jwt_vc",
         "proof": {
             "proof_type": "jwt",
             "jwt": credential_request_jwt
         }
     }
-    print(access_token)
-
     credential_response = await http_call(credentials_uri, "POST", data=json.dumps(data),headers=headers)
+
+    return credential_response
+
+async def send_deferred_credential_request(deferred_credential_endpoint: str,
+                                           acceptance_token: str):
+
+    headers = {
+        "Authorization": f"Bearer {acceptance_token}",
+        "Content-Type": "application/json"
+    }
+    credential_response = await http_call(deferred_credential_endpoint, "POST", data=None,headers=headers)
 
     return credential_response
