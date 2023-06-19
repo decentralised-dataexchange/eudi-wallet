@@ -395,11 +395,9 @@ async def send_credential_request(credentials_uri: str,
 
 async def send_deferred_credential_request(deferred_credential_endpoint: str,
                                            acceptance_token: str):
-
     headers = {
-        "Authorization": f"Bearer {acceptance_token}",
-        "Content-Type": "application/json"
+        "Authorization": f"Bearer {acceptance_token}"
     }
-    credential_response = await http_call(deferred_credential_endpoint, "POST", data=None,headers=headers)
+    credential_response = await http_call(deferred_credential_endpoint, "POST", data={}, headers=headers)
 
     return credential_response
