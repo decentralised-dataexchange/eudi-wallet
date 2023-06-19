@@ -135,6 +135,7 @@ class CredentialOffer:
 
 async def accept_and_fetch_credential_offer(credential_offer_uri: str) -> CredentialOffer:
     cred_offer = await http_call(credential_offer_uri, "GET", data=None, headers=None)
+    print(cred_offer)
     return CredentialOffer(**cred_offer)
 
 
@@ -243,6 +244,7 @@ class CredentialTypes(Enum):
     CTWalletCrossDeferred = 'CTWalletCrossDeferred'
     CTWalletSamePreAuthorised = 'CTWalletSamePreAuthorised'
     CTWalletCrossPreAuthorised = 'CTWalletCrossPreAuthorised'
+    CTWalletQualificationCredential = 'CTWalletQualificationCredential'
 
 
 async def fetch_credential_offer(client_id: str, credential_type: CredentialTypes):
@@ -255,7 +257,10 @@ async def fetch_credential_offer(client_id: str, credential_type: CredentialType
     encoded_params = urllib.parse.urlencode(params)
     url = f'{url}?{encoded_params}'
 
-    if credential_type in (CredentialTypes.CTWalletCrossInTime, CredentialTypes.CTWalletCrossDeferred, CredentialTypes.CTWalletCrossPreAuthorised):
+    if credential_type in (CredentialTypes.CTWalletCrossInTime, 
+                           CredentialTypes.CTWalletCrossDeferred, 
+                           CredentialTypes.CTWalletCrossPreAuthorised, 
+                           CredentialTypes.CTWalletQualificationCredential):
         resp = await http_call_text(url, "GET")
     else:
         resp = await http_call_text_redirects_disabled(url, "GET")
@@ -271,19 +276,32 @@ class AuthorizationResponseQueryParams:
     response_mode: str
     scope: str
     nonce: str
-    request_uri: str
+    request_uri: typing.Optional[str] = None
+    presentation_definition: typing.Optional[str] = None
+    request: typing.Optional[str] = None
+
+
+def get_element_by_index_from_list(list: typing.List[typing.Any], index: int) -> typing.Union[typing.Any, None]:
+    if list is None:
+        return None
+    try:
+        return list[index]
+    except IndexError:
+        return None
 
 def get_authorization_response_query_params(authorization_response_uri: str) -> AuthorizationResponseQueryParams:
     query_params = parse_query_string_parameters_from_url(authorization_response_uri)
 
-    state = query_params.get('state', [''])[0]
-    client_id = query_params.get('client_id', [''])[0]
-    redirect_uri = query_params.get('redirect_uri', [''])[0]
-    response_type = query_params.get('response_type', [''])[0]
-    response_mode = query_params.get('response_mode', [''])[0]
-    scope = query_params.get('scope', [''])[0]
-    nonce = query_params.get('nonce', [''])[0]
-    request_uri = query_params.get('request_uri', [''])[0]
+    state = get_element_by_index_from_list(query_params.get('state', ['']), 0)
+    client_id = get_element_by_index_from_list(query_params.get('client_id', ['']), 0)
+    redirect_uri = get_element_by_index_from_list(query_params.get('redirect_uri', ['']), 0)
+    response_type = get_element_by_index_from_list(query_params.get('response_type', ['']), 0)
+    response_mode = get_element_by_index_from_list(query_params.get('response_mode', ['']), 0)
+    scope = get_element_by_index_from_list(query_params.get('scope', ['']), 0)
+    nonce = get_element_by_index_from_list(query_params.get('nonce', ['']), 0)
+    request_uri = get_element_by_index_from_list(query_params.get('request_uri', ['']), 0)
+    request = get_element_by_index_from_list(query_params.get('request', ['']), 0)
+    presentation_definition = get_element_by_index_from_list(query_params.get('presentation_definition', ['']), 0)
 
     return AuthorizationResponseQueryParams(state, 
                                             client_id, 
@@ -291,7 +309,9 @@ def get_authorization_response_query_params(authorization_response_uri: str) -> 
                                             response_type, 
                                             response_mode, 
                                             scope, nonce, 
-                                            request_uri)
+                                            request_uri,
+                                            presentation_definition,
+                                            request)
 
 def generate_code_verifier(length=128):
     valid_characters = string.ascii_letters + string.digits + "-._~"
@@ -321,6 +341,20 @@ async def send_id_token_response(auth_server_direct_post_uri: str,
                                                                         data="id_token=" + id_token + "&state=" + state, 
                                                                         headers=headers)
     return issuer_authorize_response
+
+async def send_vp_token_response(auth_server_direct_post_uri: str,
+                                vp_token: str,
+                                presentation_submission: str,
+                                state: str) -> str:
+    headers = {
+        "Content-Type": "application/x-www-form-urlencoded"
+    }
+    vp_token_response = await http_call_text_redirects_disabled(auth_server_direct_post_uri,
+                                                                "POST",
+                                                                data="vp_token=" + vp_token + "&presentation_submission=" + presentation_submission + "&state=" + state,
+                                                                headers=headers)
+    return vp_token_response
+
 
 @dataclass
 class AccessTokenResponse:

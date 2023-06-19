@@ -2,8 +2,13 @@ import json
 import dataclasses
 import time
 from dataclasses import dataclass
+import typing
+import uuid
 from multiformats import multicodec, multibase
 from jwcrypto import jwk, jwt
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 @dataclass
 class PublicKeyJWK:
@@ -13,12 +18,14 @@ class PublicKeyJWK:
     y: str
 
 class KeyDid:
-    def __init__(self):
+    def __init__(self, seed):
+        self._seed = seed
         self._did = None
         self._method_specific_id = None
         self._private_key_jwk = None
         self._public_key_jwk = None
         self._key = None
+        self._public_key = None
     
     @property
     def did(self):
@@ -33,9 +40,22 @@ class KeyDid:
         return self._public_key_jwk
 
     def create_keypair(self):
-        self._key = jwk.JWK.generate(kty='EC', crv='P-256')
-        self._public_key_jwk = self._key.export_public(as_dict=True)
-        self._private_key_jwk = self._key.export_private(as_dict=True)
+
+        curve = ec.SECP256R1()
+        private_key = ec.derive_private_key(int.from_bytes(self._seed, 'big'), curve, default_backend())
+        public_key = private_key.public_key()
+
+        private_key_jwk = jwk.JWK.from_pem(private_key.private_bytes(encoding=serialization.Encoding.PEM, format=serialization.PrivateFormat.PKCS8, encryption_algorithm=serialization.NoEncryption()))
+        public_key_jwk = jwk.JWK.from_pem(public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo))
+
+        self._key = private_key_jwk
+        self._public_key = public_key_jwk
+        self._public_key_jwk = public_key_jwk.export_public(as_dict=True)
+        self._private_key_jwk = private_key_jwk.export_private(as_dict=True)
+
+        # self._key = jwk.JWK.generate(kty='EC', crv='P-256')
+        # self._public_key_jwk = self._key.export_public(as_dict=True)
+        # self._private_key_jwk = self._key.export_private(as_dict=True)
     
     def generate_did(self, jwk: PublicKeyJWK):
         # Convert jwk to json string
@@ -83,6 +103,40 @@ class KeyDid:
             "exp": int(time.time()) + 86400,
             "nonce": nonce
         }
+        token = jwt.JWT(header=header, claims=payload)
+        token.make_signed_token(self._key)
+
+        return token.serialize()
+    
+    def generate_vp_token_response(self, auth_server_uri: str, nonce: str, verifiable_credentials: typing.List[str]) -> str:
+        header = {
+            "typ": 'JWT',
+            "alg": 'ES256',
+            "kid": f'{self._did}#{self._method_specific_id}'
+        }
+
+        iat = int(time.time())
+        exp = iat + 3600
+        nbf = iat
+        jti = f"urn:uuid:{uuid.uuid4()}"
+        payload = {
+            "iss": self._did,
+            "sub": self._did,
+            "aud": auth_server_uri,
+            "exp": exp,
+            "iat": iat,
+            "nbf": nbf,
+            "nonce": nonce,
+            "jti": jti,
+            "vp": {
+                "@context": [ "https://www.w3.org/2018/credentials/v1" ],
+                "id": jti,
+                "type": [ "VerifiablePresentation" ],
+                "holder": self._did,
+                "verifiableCredential": verifiable_credentials
+            }
+        }
+
         token = jwt.JWT(header=header, claims=payload)
         token.make_signed_token(self._key)
 
