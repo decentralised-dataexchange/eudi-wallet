@@ -142,3 +142,24 @@ class KeyDid:
 
         return token.serialize()
     
+    def generate_sd_jwt(self, _sd: typing.List[str]) -> str:
+        header = {
+            "alg": 'ES256',
+        }
+        iat = int(time.time())
+        exp = iat + 3600
+        payload = {
+            "_sd": _sd,
+            "iss": "https://issuer.igrant.io",
+            "iat": iat,
+            "exp": exp,
+            "_sd_alg": "sha-256",
+            "cnf": {
+                "jwk": self._public_key_jwk
+            }
+        }
+        token = jwt.JWT(header=header, claims=payload)
+        token.make_signed_token(self._key)
+
+        return token.serialize()
+    
