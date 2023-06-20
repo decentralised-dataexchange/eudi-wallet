@@ -1,6 +1,9 @@
 import asyncio
 import base64
 import datetime
+import os
+import typing
+import json
 from urllib.parse import parse_qs, urlparse
 
 import aiohttp
@@ -154,3 +157,18 @@ def parse_query_string_parameters_from_url(url):
     query_string = parsed_url.query
 
     return parse_qs(query_string)
+
+def generate_random_salt() -> str:
+    # Generate a random salt with 16 bytes (128 bits)
+    salt = os.urandom(16)
+
+    # Convert the salt to hexadecimal representation
+    salt_hex = salt.hex()
+
+    return salt_hex
+
+def generate_disclosure_content_and_base64(claim_key: str, claims: dict) -> typing.Tuple[str, str]:
+    claim_salt = generate_random_salt()
+    claim_disclosure = [claim_salt, claim_key, claims[claim_key]]
+    claim_disclosure_base64 = base64.urlsafe_b64encode(json.dumps(claim_disclosure).encode('utf-8')).decode('utf-8').rstrip("=")
+    return claim_disclosure, claim_disclosure_base64
