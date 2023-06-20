@@ -153,10 +153,7 @@ class KeyDid:
             "iss": "https://issuer.igrant.io",
             "iat": iat,
             "exp": exp,
-            "_sd_alg": "sha-256",
-            "cnf": {
-                "jwk": self._public_key_jwk
-            }
+            "_sd_alg": "sha-256"
         }
         token = jwt.JWT(header=header, claims=payload)
         token.make_signed_token(self._key)
