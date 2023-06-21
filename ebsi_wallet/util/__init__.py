@@ -167,8 +167,8 @@ def generate_random_salt() -> str:
 
     return salt_hex
 
-def generate_disclosure_content_and_base64(claim_key: str, claims: dict) -> typing.Tuple[str, str]:
+def generate_disclosure_content_and_base64(claim_key: str, claim_value: typing.Any) -> typing.Tuple[str, str]:
     claim_salt = generate_random_salt()
-    claim_disclosure = [claim_salt, claim_key, claims[claim_key]]
+    claim_disclosure = [claim_salt, claim_key, claim_value]
     claim_disclosure_base64 = base64.urlsafe_b64encode(json.dumps(claim_disclosure).encode('utf-8')).decode('utf-8').rstrip("=")
     return claim_disclosure, claim_disclosure_base64
