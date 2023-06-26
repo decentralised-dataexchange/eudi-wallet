@@ -1,10 +1,10 @@
 <h1 align="center">
-    PyEBSIWallet - EBSI Wallet
+    EUDI Wallet SDK
 </h1>
 
 <p align="center">
-    <a href="/../../commits/" title="Last Commit"><img src="https://img.shields.io/github/last-commit/decentralised-dataexchange/ebsi-wallet?style=flat"></a>
-    <a href="/../../issues" title="Open Issues"><img src="https://img.shields.io/github/issues/decentralised-dataexchange/ebsi-wallet?style=flat"></a>
+    <a href="/../../commits/" title="Last Commit"><img src="https://img.shields.io/github/last-commit/decentralised-dataexchange/eudi-wallet?style=flat"></a>
+    <a href="/../../issues" title="Open Issues"><img src="https://img.shields.io/github/issues/decentralised-dataexchange/eudi-wallet?style=flat"></a>
     <a href="./LICENSE" title="License"><img src="https://img.shields.io/badge/License-Apache%202.0-green.svg?style=flat"></a>
 </p>
 
@@ -18,7 +18,7 @@
 
 ## About
 
-This repository hosts the source code for the Python port for the EBSI wallet. This implementation uses ES256K (ECDSA) signing algorithm. 
+This repository hosts the source code for the Python port for the EUDI wallet. This implementation uses ES256K (ECDSA) signing algorithm. 
 
 ## Release Status
 
@@ -26,10 +26,10 @@ Work in progress, and the codebase is not stable.
 
 ## Installation
 
-ebsi-wallet can be installed (preferably in a `virtualenv`) using ``pip`` as follows:
+eudi-wallet can be installed (preferably in a `virtualenv`) using ``pip`` as follows:
 
 ```bash
-   $ pip install ebsi-wallet
+   $ pip install eudi-wallet
 ```
 
 ## Contributing
