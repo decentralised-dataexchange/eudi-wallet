@@ -158,6 +158,14 @@ def parse_query_string_parameters_from_url(url):
 
     return parse_qs(query_string)
 
+def get_element_by_index_from_list(list: typing.List[typing.Any], index: int) -> typing.Union[typing.Any, None]:
+    if list is None:
+        return None
+    try:
+        return list[index]
+    except IndexError:
+        return None
+
 def generate_random_salt() -> str:
     # Generate a random salt with 16 bytes (128 bits)
     salt = os.urandom(16)

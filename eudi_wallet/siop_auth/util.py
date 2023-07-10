@@ -18,7 +18,8 @@ from eudi_wallet.util import (
     http_call, 
     http_call_text, 
     http_call_text_redirects_disabled,
-    parse_query_string_parameters_from_url
+    parse_query_string_parameters_from_url,
+    get_element_by_index_from_list
 )
 
 
@@ -279,15 +280,6 @@ class AuthorizationResponseQueryParams:
     request_uri: typing.Optional[str] = None
     presentation_definition: typing.Optional[str] = None
     request: typing.Optional[str] = None
-
-
-def get_element_by_index_from_list(list: typing.List[typing.Any], index: int) -> typing.Union[typing.Any, None]:
-    if list is None:
-        return None
-    try:
-        return list[index]
-    except IndexError:
-        return None
 
 def get_authorization_response_query_params(authorization_response_uri: str) -> AuthorizationResponseQueryParams:
     query_params = parse_query_string_parameters_from_url(authorization_response_uri)

@@ -13,13 +13,10 @@ class Ethereum:
         # Ethereum private keys are 32 bytes long.
         self._private_key = keccak_256(secrets.token_bytes(32)).digest()
 
-        # Ethereum public keys are 64 bytes long.
         # Uncompressed public key is 65 bytes long.
-        # [1:] is for stripping out the byte that represents compressed or uncompressed format.
-        # After stripping, size becomes 64 bytes long.
         self._public_key = PublicKey.from_valid_secret(self._private_key).format(
             compressed=False
-        )[1:]
+        )
 
         # Ethereum address is 20 bytes long.
         # Address is the rightmost 20 bytes of the public key keccak-256 hash.
