@@ -15,11 +15,11 @@ from eudi_wallet.did_jwt import create_jwt, decode_jwt
 from eudi_wallet.did_jwt.signer_algorithm import ES256K_signer_algorithm
 from eudi_wallet.ethereum import Ethereum
 from eudi_wallet.util import (
-    http_call, 
-    http_call_text, 
+    http_call,
+    http_call_text,
     http_call_text_redirects_disabled,
     parse_query_string_parameters_from_url,
-    get_element_by_index_from_list
+    get_element_by_index_from_list,
 )
 
 
@@ -118,15 +118,18 @@ async def aes_cbc_ecies_decrypt(ake1_enc_payload, client):
 
     return json.loads(decrypted.decode("utf-8"))
 
+
 @dataclass
 class Credential:
     format: str
     types: typing.List[str]
     trust_framework: typing.Dict[str, str]
 
+
 @dataclass
 class Grants:
     authorization_code: typing.Dict[str, str]
+
 
 @dataclass
 class CredentialOffer:
@@ -134,7 +137,10 @@ class CredentialOffer:
     credentials: typing.List[Credential]
     grants: Grants
 
-async def accept_and_fetch_credential_offer(credential_offer_uri: str) -> CredentialOffer:
+
+async def accept_and_fetch_credential_offer(
+    credential_offer_uri: str,
+) -> CredentialOffer:
     cred_offer = await http_call(credential_offer_uri, "GET", data=None, headers=None)
     print(cred_offer)
     return CredentialOffer(**cred_offer)
@@ -146,10 +152,12 @@ class TrustFramework:
     type: str
     uri: str
 
+
 @dataclass
 class Display:
     name: str
     locale: str
+
 
 @dataclass
 class Credential:
@@ -157,6 +165,7 @@ class Credential:
     types: typing.List[str]
     trust_framework: TrustFramework
     display: typing.List[Display]
+
 
 @dataclass
 class OpenIDCredentialIssuerConfig:
@@ -166,23 +175,32 @@ class OpenIDCredentialIssuerConfig:
     deferred_credential_endpoint: str
     credentials_supported: typing.List[Credential]
 
-async def fetch_openid_credential_issuer_configuration(credential_issuer_uri: str) -> OpenIDCredentialIssuerConfig:
+
+async def fetch_openid_credential_issuer_configuration(
+    credential_issuer_uri: str,
+) -> OpenIDCredentialIssuerConfig:
     wellknown_uri = credential_issuer_uri + "/.well-known/openid-credential-issuer"
-    openid_credential_issuer_config = await http_call(wellknown_uri, "GET", data=None, headers=None)
+    openid_credential_issuer_config = await http_call(
+        wellknown_uri, "GET", data=None, headers=None
+    )
     return OpenIDCredentialIssuerConfig(**openid_credential_issuer_config)
+
 
 @dataclass
 class RequestAuthenticationMethodsSupported:
     authorization_endpoint: typing.List[str]
 
+
 @dataclass
 class JWKSSupported:
     alg_values_supported: typing.List[str]
+
 
 @dataclass
 class VPFormatsSupported:
     jwt_vp: JWKSSupported
     jwt_vc: JWKSSupported
+
 
 @dataclass
 class OpenIDAuthServerConfig:
@@ -208,10 +226,14 @@ class OpenIDAuthServerConfig:
     subject_trust_frameworks_supported: typing.List[str]
     id_token_types_supported: typing.List[str]
 
+
 async def fetch_openid_auth_server_configuration(authorization_server_uri: str) -> dict:
     wellknown_uri = authorization_server_uri + "/.well-known/openid-configuration"
-    openid_auth_server_config = await http_call(wellknown_uri, "GET", data=None, headers=None)
+    openid_auth_server_config = await http_call(
+        wellknown_uri, "GET", data=None, headers=None
+    )
     return OpenIDAuthServerConfig(**openid_auth_server_config)
+
 
 @dataclass
 class AuthorizationRequestQueryParams:
@@ -227,46 +249,50 @@ class AuthorizationRequestQueryParams:
     client_metadata: str
     issuer_state: str
 
-async def perform_authorization(authorization_server_uri: str,
-                                query_params: AuthorizationRequestQueryParams) -> str:
+
+async def perform_authorization(
+    authorization_server_uri: str, query_params: AuthorizationRequestQueryParams
+) -> str:
     encoded_params = urllib.parse.urlencode(dataclasses.asdict(query_params))
-    auth_url = f'{authorization_server_uri}?{encoded_params}'
-    issuer_authorize_response = await http_call_text_redirects_disabled(auth_url, 
-                                                                        "GET", 
-                                                                        data=None, 
-                                                                        headers=None)
+    auth_url = f"{authorization_server_uri}?{encoded_params}"
+    issuer_authorize_response = await http_call_text_redirects_disabled(
+        auth_url, "GET", data=None, headers=None
+    )
     return issuer_authorize_response
 
 
 class CredentialTypes(Enum):
-    CTWalletSameInTime = 'CTWalletSameInTime'
-    CTWalletCrossInTime = 'CTWalletCrossInTime'
-    CTWalletSameDeferred = 'CTWalletSameDeferred'
-    CTWalletCrossDeferred = 'CTWalletCrossDeferred'
-    CTWalletSamePreAuthorised = 'CTWalletSamePreAuthorised'
-    CTWalletCrossPreAuthorised = 'CTWalletCrossPreAuthorised'
-    CTWalletQualificationCredential = 'CTWalletQualificationCredential'
+    CTWalletSameInTime = "CTWalletSameInTime"
+    CTWalletCrossInTime = "CTWalletCrossInTime"
+    CTWalletSameDeferred = "CTWalletSameDeferred"
+    CTWalletCrossDeferred = "CTWalletCrossDeferred"
+    CTWalletSamePreAuthorised = "CTWalletSamePreAuthorised"
+    CTWalletCrossPreAuthorised = "CTWalletCrossPreAuthorised"
+    CTWalletQualificationCredential = "CTWalletQualificationCredential"
 
 
 async def fetch_credential_offer(client_id: str, credential_type: CredentialTypes):
-    url = 'https://api-conformance.ebsi.eu/conformance/v3/issuer-mock/initiate-credential-offer'
+    url = "https://api-conformance.ebsi.eu/conformance/v3/issuer-mock/initiate-credential-offer"
     params = {
-        'credential_type': credential_type.value,
-        'client_id': client_id,
-        'credential_offer_endpoint': 'openid-credential-offer://'
+        "credential_type": credential_type.value,
+        "client_id": client_id,
+        "credential_offer_endpoint": "openid-credential-offer://",
     }
     encoded_params = urllib.parse.urlencode(params)
-    url = f'{url}?{encoded_params}'
+    url = f"{url}?{encoded_params}"
 
-    if credential_type in (CredentialTypes.CTWalletCrossInTime, 
-                           CredentialTypes.CTWalletCrossDeferred, 
-                           CredentialTypes.CTWalletCrossPreAuthorised, 
-                           CredentialTypes.CTWalletQualificationCredential):
+    if credential_type in (
+        CredentialTypes.CTWalletCrossInTime,
+        CredentialTypes.CTWalletCrossDeferred,
+        CredentialTypes.CTWalletCrossPreAuthorised,
+        CredentialTypes.CTWalletQualificationCredential,
+    ):
         resp = await http_call_text(url, "GET")
     else:
         resp = await http_call_text_redirects_disabled(url, "GET")
         resp = str(resp).split("Location': '")[1].split("'")[0]
     return resp
+
 
 @dataclass
 class AuthorizationResponseQueryParams:
@@ -281,70 +307,101 @@ class AuthorizationResponseQueryParams:
     presentation_definition: typing.Optional[str] = None
     request: typing.Optional[str] = None
 
-def get_authorization_response_query_params(authorization_response_uri: str) -> AuthorizationResponseQueryParams:
+
+def get_authorization_response_query_params(
+    authorization_response_uri: str,
+) -> AuthorizationResponseQueryParams:
     query_params = parse_query_string_parameters_from_url(authorization_response_uri)
 
-    state = get_element_by_index_from_list(query_params.get('state', ['']), 0)
-    client_id = get_element_by_index_from_list(query_params.get('client_id', ['']), 0)
-    redirect_uri = get_element_by_index_from_list(query_params.get('redirect_uri', ['']), 0)
-    response_type = get_element_by_index_from_list(query_params.get('response_type', ['']), 0)
-    response_mode = get_element_by_index_from_list(query_params.get('response_mode', ['']), 0)
-    scope = get_element_by_index_from_list(query_params.get('scope', ['']), 0)
-    nonce = get_element_by_index_from_list(query_params.get('nonce', ['']), 0)
-    request_uri = get_element_by_index_from_list(query_params.get('request_uri', ['']), 0)
-    request = get_element_by_index_from_list(query_params.get('request', ['']), 0)
-    presentation_definition = get_element_by_index_from_list(query_params.get('presentation_definition', ['']), 0)
+    state = get_element_by_index_from_list(query_params.get("state", [""]), 0)
+    client_id = get_element_by_index_from_list(query_params.get("client_id", [""]), 0)
+    redirect_uri = get_element_by_index_from_list(
+        query_params.get("redirect_uri", [""]), 0
+    )
+    response_type = get_element_by_index_from_list(
+        query_params.get("response_type", [""]), 0
+    )
+    response_mode = get_element_by_index_from_list(
+        query_params.get("response_mode", [""]), 0
+    )
+    scope = get_element_by_index_from_list(query_params.get("scope", [""]), 0)
+    nonce = get_element_by_index_from_list(query_params.get("nonce", [""]), 0)
+    request_uri = get_element_by_index_from_list(
+        query_params.get("request_uri", [""]), 0
+    )
+    request = get_element_by_index_from_list(query_params.get("request", [""]), 0)
+    presentation_definition = get_element_by_index_from_list(
+        query_params.get("presentation_definition", [""]), 0
+    )
 
-    return AuthorizationResponseQueryParams(state, 
-                                            client_id, 
-                                            redirect_uri, 
-                                            response_type, 
-                                            response_mode, 
-                                            scope, nonce, 
-                                            request_uri,
-                                            presentation_definition,
-                                            request)
+    return AuthorizationResponseQueryParams(
+        state,
+        client_id,
+        redirect_uri,
+        response_type,
+        response_mode,
+        scope,
+        nonce,
+        request_uri,
+        presentation_definition,
+        request,
+    )
+
 
 def generate_code_verifier(length=128):
     valid_characters = string.ascii_letters + string.digits + "-._~"
-    code_verifier = ''.join(secrets.choice(valid_characters) for _ in range(length))
+    code_verifier = "".join(secrets.choice(valid_characters) for _ in range(length))
     return code_verifier
+
 
 def generate_code_challenge(code_verifier: str) -> str:
     if len(code_verifier) < 43 or len(code_verifier) > 128:
         raise ValueError("code_verifier must be between 43 and 128 characters long.")
-    valid_characters = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~")
+    valid_characters = set(
+        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-._~"
+    )
     if not all(char in valid_characters for char in code_verifier):
         raise ValueError("code_verifier contains invalid characters.")
     code_verifier_bytes = code_verifier.encode("utf-8")
     sha256_hash = hashlib.sha256(code_verifier_bytes).digest()
-    base64url_encoded = base64.urlsafe_b64encode(sha256_hash).rstrip(b"=").decode("utf-8")
+    base64url_encoded = (
+        base64.urlsafe_b64encode(sha256_hash).rstrip(b"=").decode("utf-8")
+    )
 
     return base64url_encoded
 
-async def send_id_token_response(auth_server_direct_post_uri: str,
-                                id_token: str,
-                                state: str) -> str:
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    issuer_authorize_response = await http_call_text_redirects_disabled(auth_server_direct_post_uri, 
-                                                                        "POST", 
-                                                                        data="id_token=" + id_token + "&state=" + state, 
-                                                                        headers=headers)
+
+async def send_id_token_response(
+    auth_server_direct_post_uri: str, id_token: str, state: str
+) -> str:
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    issuer_authorize_response = await http_call_text_redirects_disabled(
+        auth_server_direct_post_uri,
+        "POST",
+        data="id_token=" + id_token + "&state=" + state,
+        headers=headers,
+    )
     return issuer_authorize_response
 
-async def send_vp_token_response(auth_server_direct_post_uri: str,
-                                vp_token: str,
-                                presentation_submission: str,
-                                state: str) -> str:
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
-    vp_token_response = await http_call_text_redirects_disabled(auth_server_direct_post_uri,
-                                                                "POST",
-                                                                data="vp_token=" + vp_token + "&presentation_submission=" + presentation_submission + "&state=" + state,
-                                                                headers=headers)
+
+async def send_vp_token_response(
+    auth_server_direct_post_uri: str,
+    vp_token: str,
+    presentation_submission: str,
+    state: str,
+) -> str:
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
+    vp_token_response = await http_call_text_redirects_disabled(
+        auth_server_direct_post_uri,
+        "POST",
+        data="vp_token="
+        + vp_token
+        + "&presentation_submission="
+        + presentation_submission
+        + "&state="
+        + state,
+        headers=headers,
+    )
     return vp_token_response
 
 
@@ -357,73 +414,72 @@ class AccessTokenResponse:
     c_nonce: str
     c_nonce_expires_in: int
 
-async def exchange_auth_code_for_access_token(token_uri: str,
-                                              client_id: str,
-                                              code: str,
-                                              code_verifier: str) -> AccessTokenResponse:
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
+
+async def exchange_auth_code_for_access_token(
+    token_uri: str, client_id: str, code: str, code_verifier: str
+) -> AccessTokenResponse:
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     query_params = {
         "grant_type": "authorization_code",
         "code": code,
         "client_id": client_id,
-        "code_verifier": code_verifier
+        "code_verifier": code_verifier,
     }
     encoded_params = urllib.parse.urlencode(query_params)
-    access_token_response = await http_call(token_uri,
-                                                "POST",
-                                                data=encoded_params,
-                                                headers=headers)
+    access_token_response = await http_call(
+        token_uri, "POST", data=encoded_params, headers=headers
+    )
     return AccessTokenResponse(**access_token_response)
 
 
-async def exchange_pre_authorized_code_for_access_token(token_uri: str, user_pin: str, pre_authorized_code: str) -> AccessTokenResponse:
-    headers = {
-        "Content-Type": "application/x-www-form-urlencoded"
-    }
+async def exchange_pre_authorized_code_for_access_token(
+    token_uri: str, user_pin: str, pre_authorized_code: str
+) -> AccessTokenResponse:
+    headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
     query_params = {
         "grant_type": "urn:ietf:params:oauth:grant-type:pre-authorized_code",
         "user_pin": user_pin,
-        "pre-authorized_code": pre_authorized_code
+        "pre-authorized_code": pre_authorized_code,
     }
     encoded_params = urllib.parse.urlencode(query_params)
-    access_token_response = await http_call(token_uri,
-                                                "POST",
-                                                data=encoded_params,
-                                                headers=headers)
+    access_token_response = await http_call(
+        token_uri, "POST", data=encoded_params, headers=headers
+    )
     print(access_token_response)
     return AccessTokenResponse(**access_token_response)
 
-async def send_credential_request(credentials_uri: str,
-                                  access_token: str,
-                                  credential_request_jwt: str,
-                                  credential_types: typing.List[str]):
 
+async def send_credential_request(
+    credentials_uri: str,
+    access_token: str,
+    credential_request_jwt: str,
+    credential_types: typing.List[str],
+):
     headers = {
         "Authorization": f"Bearer {access_token}",
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
     }
 
     data = {
         "types": credential_types,
         "format": "jwt_vc",
-        "proof": {
-            "proof_type": "jwt",
-            "jwt": credential_request_jwt
-        }
+        "proof": {"proof_type": "jwt", "jwt": credential_request_jwt},
     }
-    credential_response = await http_call(credentials_uri, "POST", data=json.dumps(data),headers=headers)
+    credential_response = await http_call(
+        credentials_uri, "POST", data=json.dumps(data), headers=headers
+    )
 
     return credential_response
 
-async def send_deferred_credential_request(deferred_credential_endpoint: str,
-                                           acceptance_token: str):
-    headers = {
-        "Authorization": f"Bearer {acceptance_token}"
-    }
-    credential_response = await http_call(deferred_credential_endpoint, "POST", data={}, headers=headers)
+
+async def send_deferred_credential_request(
+    deferred_credential_endpoint: str, acceptance_token: str
+):
+    headers = {"Authorization": f"Bearer {acceptance_token}"}
+    credential_response = await http_call(
+        deferred_credential_endpoint, "POST", data={}, headers=headers
+    )
 
     return credential_response

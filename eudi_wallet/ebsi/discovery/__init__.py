@@ -1,1 +1,0 @@
-from eudi_wallet.ebsi.discovery.discovery import *
