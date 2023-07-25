@@ -1,0 +1,2 @@
+class CredentialRequestError(Exception):
+    pass
