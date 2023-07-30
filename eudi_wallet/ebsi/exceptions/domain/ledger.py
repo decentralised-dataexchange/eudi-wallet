@@ -1,0 +1,2 @@
+class SendSignedTransactionError(Exception):
+    pass

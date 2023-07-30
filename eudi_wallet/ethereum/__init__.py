@@ -1,4 +1,5 @@
 import json
+import random
 import secrets
 import typing
 
@@ -8,10 +9,17 @@ from sha3 import keccak_256
 
 
 class Ethereum:
-    def __init__(self):
+    def __init__(self, seed: bytes = None):
+        self._seed = seed
+
+        if self._seed:
+            rand_gen = random.Random(self._seed)
+            buffer = bytearray(rand_gen.getrandbits(8) for _ in range(32))
+        else:
+            buffer = secrets.token_bytes(32)
 
         # Ethereum private keys are 32 bytes long.
-        self._private_key = keccak_256(secrets.token_bytes(32)).digest()
+        self._private_key = keccak_256(buffer).digest()
 
         # Uncompressed public key is 65 bytes long.
         self._public_key = PublicKey.from_valid_secret(self._private_key).format(
@@ -135,3 +143,7 @@ class Ethereum:
         key = jwk.JWK.from_pem(self.private_key_from_hex().to_pem())
 
         return key.thumbprint()
+
+    @property
+    def private_key_jwk(self) -> jwk.JWK:
+        return jwk.JWK.from_pem(self.private_key_from_hex().to_pem())
