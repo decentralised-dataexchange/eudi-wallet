@@ -45,8 +45,6 @@ def consume(kafka_broker_address, kafka_topic):
         "bootstrap.servers": kafka_broker_address,
         "group.id": "consumer_group_id",
         "auto.offset.reset": "earliest",
-        "max.poll.interval.ms": "600000",
-        "session.timeout.ms": "500000",
     }
 
     consumer = Consumer(conf)

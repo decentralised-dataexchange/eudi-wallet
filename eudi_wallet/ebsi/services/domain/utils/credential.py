@@ -10,6 +10,7 @@ from jwcrypto import jwk, jwt
 
 from eudi_wallet.ebsi.exceptions.domain.issuer import \
     CredentialDeserializationError
+from eudi_wallet.ebsi.services.domain.utils.jwt import get_alg_for_key
 from eudi_wallet.ebsi.value_objects.domain.issuer import (
     CredentialTypes, VerifiableAccreditationToAttest,
     VerifiableAuthorisationToOnboard)
@@ -44,11 +45,7 @@ def create_credential_token(
     iat: int = None,
     exp: int = None,
 ) -> str:
-    if key.key_curve == "P-256":
-        alg = "ES256"
-    else:
-        alg = "ES256K"
-    header = {"typ": "JWT", "alg": alg, "kid": kid}
+    header = {"typ": "JWT", "alg": get_alg_for_key(key), "kid": kid}
 
     iat = iat or int(time.time())
     nbf = iat

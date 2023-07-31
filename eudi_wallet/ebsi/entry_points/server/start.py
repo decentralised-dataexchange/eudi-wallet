@@ -10,116 +10,123 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from eudi_wallet.ebsi.entities.base import Base
-from eudi_wallet.ebsi.entry_points.server.constants import ISSUER_SUBDOMAIN
+from eudi_wallet.ebsi.entry_points.server.constants import WALLET_SUBDOMAIN
+from eudi_wallet.ebsi.entry_points.server.middlewares import (
+    error_middleware, logging_middleware)
 from eudi_wallet.ebsi.entry_points.server.routes import routes
 from eudi_wallet.ebsi.entry_points.server.startup import app_startup
 
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.DEBUG)
-handler = logging.StreamHandler()
-handler.setLevel(logging.DEBUG)
-formatter = logging.Formatter(
-    "%(asctime)s - %(name)s - %(filename)s - %(levelname)s - %(message)s"
-)
-handler.setFormatter(formatter)
-logger.addHandler(handler)
+
+class AppLogger:
+    def __init__(self, name, level=logging.DEBUG):
+        self.logger = logging.getLogger(name)
+        self.logger.setLevel(level)
+
+        handler = logging.StreamHandler()
+        handler.setLevel(level)
+        formatter = logging.Formatter(
+            "%(asctime)s - %(name)s - [%(filename)s:%(lineno)d] - %(levelname)s - %(message)s"
+        )
+        handler.setFormatter(formatter)
+        self.logger.addHandler(handler)
+
+
+class DBSetup:
+    def __init__(self, db_uri):
+        self.db_uri = db_uri
+
+    def setup_db(self):
+        engine = create_engine(self.db_uri)
+        Session = sessionmaker(bind=engine)
+
+        # It creates a table if it does not exist.
+        Base.metadata.create_all(engine)
+
+        return Session
+
+
+class NgrokSetup:
+    def __init__(self, auth_token):
+        self.auth_token = auth_token
+
+    def configure_ngrok(self, port: int, custom_domain: str):
+        ngrok.set_auth_token(self.auth_token)
+        ngrok_tunnel = ngrok.connect(port, subdomain=custom_domain)
+        return ngrok_tunnel
 
 
 async def handle_404(request: Request):
     return web.Response(text="404 - Page not found", status=404)
 
 
-def setup_db():
-    engine = create_engine("sqlite:///wallet.db")
-    Session = sessionmaker(bind=engine)
+class ServerSetup:
+    def __init__(self, db_session, producer, logger, kafka_topic):
+        self.db_session = db_session
+        self.producer = producer
+        self.logger = logger
+        self.kafka_topic = kafka_topic
 
-    # It creates a table if it does not exist.
-    Base.metadata.create_all(engine)
+    async def start_server(self, port: int):
+        app = web.Application(middlewares=[error_middleware, logging_middleware])
 
-    return Session
+        app["kafka_producer"] = self.producer
+        app["kafka_topic"] = self.kafka_topic
+        app["logger"] = self.logger
+        app["db_session"] = self.db_session
 
+        # Add startup functions
+        app.on_startup.append(app_startup)
 
-async def start_server(port: int, kafka_broker_address: str, kafka_topic: str):
-    app = web.Application()
+        # Add routes
+        app.add_routes(routes)
+        app.add_routes([web.route("*", "/{tail:.*}", handle_404, name="handle_404")])
 
-    conf = {"bootstrap.servers": kafka_broker_address}
-    producer = Producer(conf)
+        runner = web.AppRunner(app)
+        await runner.setup()
 
-    db_session = setup_db()
+        site = web.TCPSite(runner, "localhost", port)
+        await site.start()
 
-    app["kafka_producer"] = producer
-    app["kafka_topic"] = kafka_topic
-    app["logger"] = logger
-    app["db_session"] = db_session
-
-    # Add startup functions
-    app.on_startup.append(app_startup)
-
-    # Add routes
-    app.add_routes(routes)
-    app.add_routes([web.route("*", "/{tail:.*}", handle_404, name="handle_404")])
-
-    runner = web.AppRunner(app)
-    await runner.setup()
-
-    site = web.TCPSite(runner, "localhost", port)
-    await site.start()
-
-    return runner, site
+        return runner, site
 
 
-async def stop_server(runner, site):
-    await site.stop()
-    await runner.cleanup()
-
-
-def configure_ngrok(port: int, auth_token: str, custom_domain: str):
-    ngrok.set_auth_token(auth_token)
-    ngrok_tunnel = ngrok.connect(port, subdomain=custom_domain)
-    return ngrok_tunnel
+class ServerTeardown:
+    async def stop_server(self, runner, site):
+        await site.stop()
+        await runner.cleanup()
 
 
 @click.command()
-@click.option("--port", default=8080, help="Port number to start the server on.")
-@click.option(
-    "--auth-token",
-    envvar="NGROK_AUTH_TOKEN",
-    prompt="Enter your ngrok authentication token",
-    help="ngrok authentication token.",
-)
-@click.option(
-    "--kafka-broker-address",
-    envvar="KAFKA_BROKER_ADDRESS",
-    prompt="Enter your kafka broker address",
-    help="Kafka broker address",
-)
-@click.option(
-    "--kafka-topic",
-    envvar="KAFKA_TOPIC",
-    prompt="Enter your kafka topic",
-    help="Topic to consume kafka events from",
-)
-def main(port: int, auth_token: str, kafka_broker_address: str, kafka_topic: str):
+@click.option("--port", default=8080)
+@click.option("--auth-token", envvar="NGROK_AUTH_TOKEN", prompt=True)
+@click.option("--kafka-broker-address", envvar="KAFKA_BROKER_ADDRESS", prompt=True)
+@click.option("--kafka-topic", envvar="KAFKA_TOPIC", prompt=True)
+def main(port, auth_token, kafka_broker_address, kafka_topic):
+    logger = AppLogger(__name__).logger
+    db_session = DBSetup("sqlite:///wallet.db").setup_db()
+    conf = {"bootstrap.servers": kafka_broker_address}
+    producer = Producer(conf)
+
+    server = ServerSetup(db_session, producer, logger, kafka_topic)
+    ngrok_tunnel = NgrokSetup(auth_token)
+
     loop = asyncio.get_event_loop()
-    runner, site = loop.run_until_complete(
-        start_server(port, kafka_broker_address, kafka_topic)
-    )
+    runner, site = loop.run_until_complete(server.start_server(port))
 
     try:
-        ngrok_tunnel = configure_ngrok(port, auth_token, ISSUER_SUBDOMAIN)
-        print(f"ngrok tunnel URL: {ngrok_tunnel.public_url}")
-
+        tunnel = ngrok_tunnel.configure_ngrok(port, WALLET_SUBDOMAIN)
+        print(f"ngrok tunnel URL: {tunnel.public_url}")
         loop.run_forever()
 
     except KeyboardInterrupt:
         pass
 
     finally:
-        loop.run_until_complete(stop_server(runner, site))
+        loop.run_until_complete(server.stop(runner, site))
         loop.close()
-        # If tried to stop the server before ngrok tunnel is created, UnboundLocalError is raised
-        if ngrok_tunnel:
-            ngrok.disconnect(ngrok_tunnel.public_url)
+
+        if "tunnel" in locals():
+            ngrok.disconnect(tunnel.public_url)
             ngrok.kill()
 
 

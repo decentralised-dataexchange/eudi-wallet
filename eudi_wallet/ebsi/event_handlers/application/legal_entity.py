@@ -30,7 +30,7 @@ async def handle_event_onboard_trusted_issuer(
             auth_server_configuration=auth_server_configuration,
             logger=logger,
             issuer_domain=event.issuer_domain,
-            repository=repository,
+            legal_entity_repository=repository,
         )
         await legal_entity_service.set_cryptographic_seed(
             crypto_seed=legal_entity_entity.cryptographic_seed

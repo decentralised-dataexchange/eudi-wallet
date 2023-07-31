@@ -3,18 +3,33 @@ import typing
 from logging import Logger
 
 from jwcrypto import jwk, jwt  # type: ignore
+from jwcrypto.common import json_decode
 
 from eudi_wallet.ebsi.exceptions.domain.authn import (
-    AuthorizationCodeRedirectError, InvalidResponseStatusError)
-from eudi_wallet.ebsi.services.domain.authn_request_builder import \
-    AuthorizationRequestBuilder
+    AuthorizationCodeRedirectError,
+    InvalidAccessTokenError,
+    InvalidResponseStatusError,
+)
+from eudi_wallet.ebsi.services.domain.authn_request_builder import (
+    AuthorizationRequestBuilder,
+)
+from eudi_wallet.ebsi.services.domain.utils.jwt import get_alg_for_key
 from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
 from eudi_wallet.ebsi.value_objects.domain.authn import (
-    AuthorizationCodeRedirectResponse, ClientAssertionJWTToken,
-    CreateIDTokenResponse, DescriptorMap, DescriptorMapPath, IDTokenRequest,
-    IDTokenRequestJWT, IDTokenResponseJWTToken, PresentationDefinition,
-    PresentationSubmission, TokenResponse, VpJwtTokenPayloadModel)
+    AuthorizationCodeRedirectResponse,
+    ClientAssertionJWTToken,
+    CreateIDTokenResponse,
+    DescriptorMap,
+    DescriptorMapPath,
+    IDTokenRequest,
+    IDTokenRequestJWT,
+    IDTokenResponseJWTToken,
+    PresentationDefinition,
+    PresentationSubmission,
+    TokenResponse,
+    VpJwtTokenPayloadModel,
+)
 from eudi_wallet.util import parse_query_string_parameters_from_url
 
 
@@ -37,11 +52,7 @@ class AuthnService:
         key_id: str,
         key: jwk.JWK,
     ) -> str:
-        if key.key_curve == "P-256":
-            alg = "ES256"
-        else:
-            alg = "ES256K"
-        header = {"typ": "JWT", "alg": alg, "kid": key_id}
+        header = {"typ": "JWT", "alg": get_alg_for_key(key), "kid": key_id}
         token = jwt.JWT(header=header, claims=authn_request_jwt_payload.to_dict())
         token.make_signed_token(key)
 
@@ -97,11 +108,11 @@ class AuthnService:
     def create_id_token_response(
         self, create_id_token_response: CreateIDTokenResponse, key: jwk.JWK
     ) -> IDTokenResponseJWTToken:
-        if key.key_curve == "P-256":
-            alg = "ES256"
-        else:
-            alg = "ES256K"
-        header = {"typ": "JWT", "alg": alg, "kid": create_id_token_response.kid}
+        header = {
+            "typ": "JWT",
+            "alg": get_alg_for_key(key),
+            "kid": create_id_token_response.kid,
+        }
         iat = int(time.time())
         exp = iat + 3600
         payload = {
@@ -198,12 +209,66 @@ class AuthnService:
         presentation_definition_dict = await response.json()
         return PresentationDefinition.from_dict(presentation_definition_dict)
 
+    @staticmethod
+    def create_access_token(
+        iss: str,
+        aud: str,
+        sub: str,
+        iat: int,
+        nbf: int,
+        exp: int,
+        nonce: str,
+        kid: str,
+        key: jwk.JWK,
+        **kwargs,
+    ) -> str:
+        header = {"typ": "JWT", "alg": get_alg_for_key(key), "kid": kid}
+
+        iat = int(time.time())
+        nbf = iat
+        exp = iat + 86400
+        jwt_payload = {
+            "iss": iss,
+            "aud": aud,
+            "sub": sub,
+            "iat": iat,
+            "nbf": nbf,
+            "exp": exp,
+            "nonce": nonce,
+            **kwargs,
+        }
+        token = jwt.JWT(header=header, claims=jwt_payload)
+        token.make_signed_token(key)
+
+        return token.serialize()
+
+    @staticmethod
+    def verify_access_token(
+        token: str,
+        aud: str,
+        sub: str,
+        key: jwk.JWK,
+    ) -> None:
+        try:
+            JWT = jwt.JWT(key=key, jwt=token)
+            claims = JWT.claims
+
+            # Verify claims
+            claims_json = json_decode(claims)
+            aud_claim = claims_json.get("aud", None)
+            sub_claim = claims_json.get("sub", None)
+
+            if aud_claim and aud_claim != aud:
+                raise InvalidAccessTokenError(f"Invalid aud claim {aud_claim}")
+
+            if sub_claim and sub_claim != sub:
+                raise InvalidAccessTokenError(f"Invalid sub claim {sub_claim}")
+
+        except jwt.JWTExpired:
+            raise InvalidAccessTokenError(f"Access token {token} expired")
+
     def create_vp_token(self, payload: VpJwtTokenPayloadModel, key: jwk.JWK) -> str:
-        if key.key_curve == "P-256":
-            alg = "ES256"
-        else:
-            alg = "ES256K"
-        header = {"typ": "JWT", "alg": alg, "kid": payload.kid}
+        header = {"typ": "JWT", "alg": get_alg_for_key(key), "kid": payload.kid}
 
         iat = int(time.time())
         nbf = iat

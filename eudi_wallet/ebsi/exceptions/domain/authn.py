@@ -4,3 +4,7 @@ class InvalidResponseStatusError(Exception):
 
 class AuthorizationCodeRedirectError(Exception):
     pass
+
+
+class InvalidAccessTokenError(Exception):
+    pass

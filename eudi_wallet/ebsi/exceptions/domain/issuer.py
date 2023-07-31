@@ -4,3 +4,7 @@ class CredentialRequestError(Exception):
 
 class CredentialDeserializationError(Exception):
     pass
+
+
+class InvalidIssuerStateTokenError(Exception):
+    pass

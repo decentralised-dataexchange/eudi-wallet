@@ -1,18 +1,25 @@
-import typing
 import uuid
 from dataclasses import dataclass, field
+from typing import List, Optional
 
 from dataclasses_json import DataClassJsonMixin, config
 
 
 @dataclass
-class SendAuthorizationRequest(DataClassJsonMixin):
-    authorize_uri: str
-    client_id: str
-    redirect_uri: str
-    request: str
-    nonce: str
+class AuthorizationRequestQueryParams(DataClassJsonMixin):
+    authorize_uri: Optional[str] = None
+    client_id: Optional[str] = None
+    redirect_uri: Optional[str] = None
+    request: Optional[str] = None
+    nonce: Optional[str] = None
     scope: str = "openid"
+    response_type: Optional[str] = None
+    issuer_state: Optional[str] = None
+    state: Optional[str] = None
+    authorization_details: Optional[str] = None
+    code_challenge: Optional[str] = None
+    code_challenge_method: Optional[str] = None
+    client_metadata: Optional[str] = None
 
 
 @dataclass
@@ -115,13 +122,13 @@ class SendTokenRequest(DataClassJsonMixin):
 
 @dataclass
 class TokenResponse(DataClassJsonMixin):
-    access_token: str | None = None
-    token_type: str | None = None
-    expires_in: str | None = None
-    id_token: str | None = None
-    c_nonce: str | None = None
-    c_nonce_expires_in: str | None = None
-    scope: str | None = None
+    access_token: Optional[str] = None
+    token_type: Optional[str] = None
+    expires_in: Optional[int] = None
+    id_token: Optional[str] = None
+    c_nonce: Optional[str] = None
+    c_nonce_expires_in: Optional[int] = None
+    scope: Optional[str] = None
 
 
 @dataclass
@@ -133,7 +140,7 @@ class GetPresentationDefinitionPayload(DataClassJsonMixin):
 @dataclass
 class PresentationDefinition(DataClassJsonMixin):
     id: str
-    input_descriptors: typing.List["InputDescriptor"]
+    input_descriptors: List["InputDescriptor"]
     format: "Format"
 
 
@@ -153,11 +160,11 @@ class Format(DataClassJsonMixin):
 
 @dataclass
 class VerifiablePresentation(DataClassJsonMixin):
-    context: typing.List[str] = field(metadata=config(field_name="@context"))
+    context: List[str] = field(metadata=config(field_name="@context"))
     id: str
-    type: typing.List[str]
+    type: List[str]
     holder: str
-    verifiableCredential: typing.List[str]
+    verifiableCredential: List[str]
 
 
 @dataclass
@@ -178,7 +185,7 @@ class DescriptorMap(DataClassJsonMixin):
 @dataclass
 class PresentationSubmission(DataClassJsonMixin):
     definition_id: str
-    descriptor_map: typing.List[DescriptorMap]
+    descriptor_map: List[DescriptorMap]
     id: str = str(uuid.uuid4())
 
 

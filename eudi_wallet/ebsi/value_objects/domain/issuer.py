@@ -18,6 +18,12 @@ class CredentialTypes(Enum):
     CTRevocable = "CTRevocable"
 
 
+class CredentialIssuanceModes(Enum):
+    InTime = "InTime"
+    Deferred = "Deferred"
+    PreAuthorised = "PreAuthorised"
+
+
 @dataclass
 class CredentialResponse(DataClassJsonMixin):
     format: typing.Optional[str] = None

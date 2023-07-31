@@ -6,7 +6,9 @@ import typing
 
 from jwcrypto import jwk, jwt
 
-from eudi_wallet.ebsi.exceptions.domain.issuer import CredentialRequestError
+from eudi_wallet.ebsi.exceptions.domain.issuer import (
+    CredentialRequestError, InvalidIssuerStateTokenError)
+from eudi_wallet.ebsi.services.domain.utils.jwt import get_alg_for_key
 from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.value_objects.domain.issuer import (
     CredentialResponse, SendCredentialRequest)
@@ -56,3 +58,78 @@ class IssuerService:
         token = jwt.JWT(header=header, claims=payload)
         token.make_signed_token(key)
         return token.serialize()
+
+    def create_id_token_request(
+        self,
+        state: str,
+        iss: str,
+        aud: str,
+        exp: int,
+        response_type: str,
+        response_mode: str,
+        client_id: str,
+        redirect_uri: str,
+        scope: str,
+        nonce: str,
+        key_id: str,
+        key: jwk.JWK,
+    ) -> str:
+        header = {"typ": "JWT", "alg": get_alg_for_key(key), "kid": key_id}
+        payload = {
+            "state": state,
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": response_type,
+            "response_mode": response_mode,
+            "scope": scope,
+            "nonce": nonce,
+            "iss": iss,
+            "aud": aud,
+            "exp": exp,
+        }
+        token = jwt.JWT(header=header, claims=payload)
+        token.make_signed_token(key)
+        return token.serialize()
+
+    @staticmethod
+    def create_issuer_state(
+        iss: str,
+        aud: str,
+        sub: str,
+        iat: int,
+        nbf: int,
+        exp: int,
+        kid: str,
+        key: jwk.JWK,
+        credential_offer_id: str,
+        **kwargs,
+    ) -> str:
+        header = {"typ": "JWT", "alg": get_alg_for_key(key), "kid": kid}
+
+        iat = int(time.time())
+        nbf = iat
+        exp = iat + 86400
+        jwt_payload = {
+            "iss": iss,
+            "aud": aud,
+            "sub": sub,
+            "iat": iat,
+            "nbf": nbf,
+            "exp": exp,
+            "credential_offer_id": credential_offer_id,
+            **kwargs,
+        }
+        token = jwt.JWT(header=header, claims=jwt_payload)
+        token.make_signed_token(key)
+
+        return token.serialize()
+
+    @staticmethod
+    def verify_issuer_state(
+        token: str,
+        key: jwk.JWK,
+    ) -> None:
+        try:
+            _ = jwt.JWT(key=key, jwt=token)
+        except jwt.JWTExpired:
+            raise InvalidIssuerStateTokenError(f"Issuer state token expired: {token}")
