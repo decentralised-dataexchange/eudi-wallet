@@ -1,6 +1,6 @@
 import uuid
 from logging import Logger
-from typing import List, Union
+from typing import List, Optional, Union
 
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
@@ -58,6 +58,21 @@ class SqlAlchemyCredentialOfferRepository:
             self.logger.debug(f"No CredentialOfferEntity found with id {id}")
             return None
 
+    def get_by_acceptance_token(
+        self, acceptance_token: str
+    ) -> Union[CredentialOfferEntity, None]:
+        try:
+            return (
+                self.session.query(CredentialOfferEntity)
+                .filter(CredentialOfferEntity.acceptance_token == acceptance_token)
+                .one()
+            )
+        except exc.NoResultFound:
+            self.logger.debug(
+                f"No CredentialOfferEntity found with acceptance_token {acceptance_token}"
+            )
+            return None
+
     def get_by_id_token_request_state(
         self, state: str
     ) -> Union[CredentialOfferEntity, None]:
@@ -85,6 +100,23 @@ class SqlAlchemyCredentialOfferRepository:
         except exc.NoResultFound:
             self.logger.debug(
                 f"No CredentialOfferEntity found with authorisation code {authorisation_code}"
+            )
+            return None
+
+    def get_by_pre_authorised_code(
+        self, pre_authorised_code: str
+    ) -> Union[CredentialOfferEntity, None]:
+        try:
+            return (
+                self.session.query(CredentialOfferEntity)
+                .filter(
+                    CredentialOfferEntity.pre_authorised_code == pre_authorised_code
+                )
+                .one()
+            )
+        except exc.NoResultFound:
+            self.logger.debug(
+                f"No CredentialOfferEntity found with pre-authorised code {pre_authorised_code}"
             )
             return None
 
@@ -120,8 +152,8 @@ class SqlAlchemyCredentialOfferRepository:
     def create(
         self,
         credential_schema_id: str,
-        data_attribute_values: str,
         issuance_mode: str,
+        data_attribute_values: Optional[str] = None,
         **kwargs,
     ) -> CredentialOfferEntity:
         id = str(uuid.uuid4())

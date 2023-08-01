@@ -1,9 +1,9 @@
 import asyncio
 import base64
 import datetime
+import json
 import os
 import typing
-import json
 from urllib.parse import parse_qs, urlparse
 
 import aiohttp
@@ -66,6 +66,7 @@ async def http_call_text_redirects_disabled(url, method, data=None, headers=None
         async with session.request(
             method, url, data=data, allow_redirects=False
         ) as resp:
+            print(await resp.text())
             return resp
 
 

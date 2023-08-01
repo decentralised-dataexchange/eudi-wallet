@@ -21,7 +21,18 @@ class CredentialTypes(Enum):
 class CredentialIssuanceModes(Enum):
     InTime = "InTime"
     Deferred = "Deferred"
-    PreAuthorised = "PreAuthorised"
+
+
+class CredentialStatuses(Enum):
+    Ready = "ready"
+    Pending = "pending"
+
+
+@dataclass
+class AcceptanceTokenResponse(DataClassJsonMixin):
+    acceptance_token: typing.Optional[str] = None
+    c_nonce: typing.Optional[str] = None
+    c_nonce_expires_in: typing.Optional[int] = None
 
 
 @dataclass

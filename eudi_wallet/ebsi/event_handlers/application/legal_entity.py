@@ -22,19 +22,20 @@ async def handle_event_onboard_trusted_issuer(
         event.auth_server_config
     )
 
-    repository = SqlAlchemyLegalRepository(session=db_session, logger=logger)
-    legal_entity_entity = repository.get_first()
+    legal_entity_repository = SqlAlchemyLegalRepository(
+        session=db_session, logger=logger
+    )
+    legal_entity_service = LegalEntityService(
+        credential_issuer_configuration=credential_issuer_configuration,
+        auth_server_configuration=auth_server_configuration,
+        logger=logger,
+        issuer_domain=event.issuer_domain,
+        legal_entity_repository=legal_entity_repository,
+    )
+    legal_entity_entity = await legal_entity_service.get_first_legal_entity()
     if legal_entity_entity:
-        legal_entity_service = LegalEntityService(
-            credential_issuer_configuration=credential_issuer_configuration,
-            auth_server_configuration=auth_server_configuration,
-            logger=logger,
-            issuer_domain=event.issuer_domain,
-            legal_entity_repository=repository,
-        )
         await legal_entity_service.set_cryptographic_seed(
             crypto_seed=legal_entity_entity.cryptographic_seed
         )
         await legal_entity_service.set_entity(legal_entity_entity=legal_entity_entity)
-
         await legal_entity_service.onboard_trusted_issuer()

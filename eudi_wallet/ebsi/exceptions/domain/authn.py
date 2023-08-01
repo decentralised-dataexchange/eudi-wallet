@@ -8,3 +8,7 @@ class AuthorizationCodeRedirectError(Exception):
 
 class InvalidAccessTokenError(Exception):
     pass
+
+
+class InvalidAcceptanceTokenError(Exception):
+    pass

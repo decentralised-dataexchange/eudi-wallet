@@ -13,19 +13,29 @@ class SqlAlchemyLegalRepository:
     def __init__(self, session: Session, logger: Logger):
         self.session_factory = session
         self.logger = logger
+        self.session = None
+
+    def __enter__(self):
+        self.session = self.session_factory()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_tb is not None:
+            self.session.rollback()
+            self.logger.error(f"Exception occurred: {exc_type}, {exc_val}")
+            return False
+
+        self.session.close()
+        self.session = None
+        return True
 
     def get_first(self) -> Union[LegalEntityEntity, None]:
-        session: Session = self.session_factory()
-        try:
-            return session.query(LegalEntityEntity).first()
-        finally:
-            session.close()
+        return self.session.query(LegalEntityEntity).first()
 
     def update(self, id: str, **kwargs) -> Union[LegalEntityEntity, None]:
-        session: Session = self.session_factory()
         try:
             legal_entity: LegalEntityEntity = (
-                session.query(LegalEntityEntity)
+                self.session.query(LegalEntityEntity)
                 .filter(LegalEntityEntity.id == id)
                 .one()
             )
@@ -34,41 +44,32 @@ class SqlAlchemyLegalRepository:
                 if value is not None:
                     setattr(legal_entity, attribute, value)
 
-            session.commit()
-            session.refresh(legal_entity)
+            self.session.commit()
+            self.session.refresh(legal_entity)
             return legal_entity
         except exc.NoResultFound:
             self.logger.debug(f"No legal entity found with id {id}")
             return None
-        finally:
-            session.close()
 
     def delete(self, id: str) -> bool:
-        session: Session = self.session_factory()
         try:
             legal_entity = (
-                session.query(LegalEntityEntity)
+                self.session.query(LegalEntityEntity)
                 .filter(LegalEntityEntity.id == id)
                 .one()
             )
-            session.delete(legal_entity)
-            session.commit()
+            self.session.delete(legal_entity)
+            self.session.commit()
             self.logger.debug(f"Legal entity with id {id} has been deleted.")
             return True
         except exc.NoResultFound:
             print(f"No legal entity found with id {id}")
             return False
-        finally:
-            session.close()
 
     def create(self, **kwargs) -> LegalEntityEntity:
-        session: Session = self.session_factory()
-        try:
-            id = str(uuid.uuid4())
-            legal_entity = LegalEntityEntity(id=id, **kwargs)
-            session.add(legal_entity)
-            session.commit()
-            session.refresh(legal_entity)
-            return legal_entity
-        finally:
-            session.close()
+        id = str(uuid.uuid4())
+        legal_entity = LegalEntityEntity(id=id, **kwargs)
+        self.session.add(legal_entity)
+        self.session.commit()
+        self.session.refresh(legal_entity)
+        return legal_entity

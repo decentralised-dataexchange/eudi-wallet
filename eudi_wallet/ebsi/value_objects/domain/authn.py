@@ -1,5 +1,7 @@
 import uuid
+from collections import namedtuple
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import List, Optional
 
 from dataclasses_json import DataClassJsonMixin, config
@@ -20,6 +22,22 @@ class AuthorizationRequestQueryParams(DataClassJsonMixin):
     code_challenge: Optional[str] = None
     code_challenge_method: Optional[str] = None
     client_metadata: Optional[str] = None
+
+
+@dataclass
+class AuthorisationGrant:
+    grant_type: str
+    grant_data: str
+
+
+class AuthorisationGrants(Enum):
+    AuthorisationCode = AuthorisationGrant(
+        grant_type="authorization_code", grant_data="issuer_state"
+    )
+    PreAuthorisedCode = AuthorisationGrant(
+        grant_type="urn:ietf:params:oauth:grant-type:pre-authorized_code",
+        grant_data="pre-authorized_code",
+    )
 
 
 @dataclass

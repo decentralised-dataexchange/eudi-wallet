@@ -17,12 +17,16 @@ from eudi_wallet.ebsi.entities.application.credential_schema import \
 from eudi_wallet.ebsi.entities.application.legal_entity import \
     LegalEntityEntity
 from eudi_wallet.ebsi.exceptions.application.legal_entity import (
-    CreateAccessTokenError, CreateCredentialOfferError,
-    CredentialOfferNotFoundError, InvalidAuthorisationCodeError,
-    InvalidClientError, InvalidCodeVerifierError,
-    InvalidStateInIDTokenResponseError, StatusListNotFoundError,
-    UpdateCredentialOfferError)
-from eudi_wallet.ebsi.exceptions.domain.authn import InvalidAccessTokenError
+    ClientIdRequiredError, CreateAccessTokenError, CreateCredentialOfferError,
+    CredentialOfferIsPreAuthorizedError, CredentialOfferNotFoundError,
+    InvalidAuthorisationCodeError, InvalidClientError,
+    InvalidCodeVerifierError, InvalidPreAuthorisedCodeError,
+    InvalidStateInIDTokenResponseError, InvalidUserPinError,
+    StatusListNotFoundError, UpdateCredentialOfferError, UserPinRequiredError,
+    ValidateDataAttributeValuesAgainstDataAttributesError)
+from eudi_wallet.ebsi.exceptions.domain.authn import (
+    InvalidAcceptanceTokenError, InvalidAccessTokenError)
+from eudi_wallet.ebsi.exceptions.domain.issuer import CredentialPendingError
 from eudi_wallet.ebsi.repositories.application.credential_offer import \
     SqlAlchemyCredentialOfferRepository
 from eudi_wallet.ebsi.repositories.application.credential_schema import \
@@ -45,9 +49,12 @@ from eudi_wallet.ebsi.services.domain.utils.did import generate_and_store_did
 from eudi_wallet.ebsi.utils.date_time import generate_ISO8601_UTC
 from eudi_wallet.ebsi.utils.hex import convert_string_to_hex
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
+from eudi_wallet.ebsi.value_objects.application.legal_entity import \
+    LegalEntityRoles
 from eudi_wallet.ebsi.value_objects.domain.authn import (
-    AuthorizationRequestQueryParams, CreateIDTokenResponse, TokenResponse,
-    VerifiablePresentation, VpJwtTokenPayloadModel)
+    AuthorisationGrants, AuthorizationRequestQueryParams,
+    CreateIDTokenResponse, TokenResponse, VerifiablePresentation,
+    VpJwtTokenPayloadModel)
 from eudi_wallet.ebsi.value_objects.domain.did_registry import (
     AddVerificationMethodJSONRPC20RequestBody, AddVerificationMethodParams,
     AddVerificationRelationshipJSONRPC20RequestBody,
@@ -56,8 +63,9 @@ from eudi_wallet.ebsi.value_objects.domain.did_registry import (
 from eudi_wallet.ebsi.value_objects.domain.discovery import (
     OpenIDAuthServerConfig, OpenIDCredentialIssuerConfig)
 from eudi_wallet.ebsi.value_objects.domain.issuer import (
-    CredentialProof, CredentialRequest, CredentialRequestPayload,
-    CredentialResponse, CredentialTypes, SendCredentialRequest,
+    AcceptanceTokenResponse, CredentialIssuanceModes, CredentialProof,
+    CredentialRequest, CredentialRequestPayload, CredentialResponse,
+    CredentialStatuses, CredentialTypes, SendCredentialRequest,
     VerifiableAccreditationToAttest)
 from eudi_wallet.ebsi.value_objects.domain.ledger import (
     GetTransactionReceiptJSONRPC20RequestBody,
@@ -97,6 +105,7 @@ class LegalEntityService:
         self.legal_entity_repository = legal_entity_repository
         self.credential_schema_repository = credential_schema_repository
         self.credential_offer_repository = credential_offer_repository
+        self.crypto_seed = None
 
     async def set_cryptographic_seed(self, crypto_seed: str) -> None:
         self.crypto_seed = crypto_seed
@@ -109,6 +118,20 @@ class LegalEntityService:
         legal_entity_entity: Optional[LegalEntityEntity] = None,
     ) -> None:
         self.legal_entity_entity = legal_entity_entity
+
+    async def create_legal_entity(
+        self, cryptographic_seed: str, is_onboarding_in_progress: bool, role: str
+    ) -> LegalEntityEntity:
+        with self.legal_entity_repository as repo:
+            return repo.create(
+                cryptographic_seed=cryptographic_seed,
+                is_onboarding_in_progress=is_onboarding_in_progress,
+                role=role,
+            )
+
+    async def update_legal_entity(self, legal_entity_id: str, **kwargs):
+        with self.legal_entity_repository as repo:
+            return repo.update(legal_entity_id, **kwargs)
 
     async def get_access_token_for_ebsi_services(
         self,
@@ -695,11 +718,12 @@ class LegalEntityService:
             iss_mock_client=iss_mock_client,
         )
 
-        # Save credential to repository
-        self.legal_entity_entity = self.legal_entity_repository.update(
-            id=self.legal_entity_entity.id,
-            verifiable_authorisation_to_onboard=credential.credential,
-        )
+        with self.legal_entity_repository as repo:
+            # Save credential to repository
+            self.legal_entity_entity = repo.update(
+                id=self.legal_entity_entity.id,
+                verifiable_authorisation_to_onboard=credential.credential,
+            )
 
         vp_access_token = await self.get_access_token_for_ebsi_services(
             ebsi_auth_client=ebsi_auth_client,
@@ -790,11 +814,12 @@ class LegalEntityService:
             iss_mock_client=iss_mock_client,
         )
 
-        # Save credential to repository
-        self.legal_entity_entity = self.legal_entity_repository.update(
-            id=self.legal_entity_entity.id,
-            verifiable_accreditation_to_attest=credential.credential,
-        )
+        with self.legal_entity_repository as repo:
+            # Save credential to repository
+            self.legal_entity_entity = repo.update(
+                id=self.legal_entity_entity.id,
+                verifiable_accreditation_to_attest=credential.credential,
+            )
 
         verifiable_accreditation_to_attest: VerifiableAccreditationToAttest = (
             deserialize_credential_jwt(credential_jwt=credential.credential)
@@ -849,19 +874,21 @@ class LegalEntityService:
             await self.fill_did_registry()
             await self.fill_trusted_issuer_registry()
 
-            self.legal_entity_repository.update(
-                id=self.legal_entity_entity.id,
-                is_onboarding_in_progress=False,
-                is_onboarded=True,
-            )
+            with self.legal_entity_repository as repo:
+                self.legal_entity_entity = repo.update(
+                    id=self.legal_entity_entity.id,
+                    is_onboarding_in_progress=False,
+                    is_onboarded=True,
+                )
         except Exception as e:
             self.logger.debug(f"Error onboarding trusted issuer: {e}")
-            self.legal_entity_repository.update(
-                id=self.legal_entity_entity.id,
-                is_onboarding_in_progress=False,
-                is_onboarded=False,
-                cryptographic_seed=f"{int(time.time())}",
-            )
+            with self.legal_entity_repository as repo:
+                self.legal_entity_entity = repo.update(
+                    id=self.legal_entity_entity.id,
+                    is_onboarding_in_progress=False,
+                    is_onboarded=False,
+                    cryptographic_seed=f"{int(time.time())}",
+                )
 
     def _create_credential_token(
         self,
@@ -910,6 +937,73 @@ class LegalEntityService:
             iat=iss_in_epoch,
             exp=exp_in_epoch,
         )
+
+    async def issue_deferred_credential(
+        self,
+        acceptance_token: Optional[str] = None,
+    ) -> dict:
+        if not acceptance_token:
+            raise InvalidAcceptanceTokenError(
+                "Acceptance token is required to issue deferred credential"
+            )
+
+        with self.credential_offer_repository as repo:
+            credential_offer_entity = repo.get_by_acceptance_token(acceptance_token)
+            if not credential_offer_entity:
+                raise CredentialOfferNotFoundError("Credential offer not found")
+
+            credential_schema_entity: CredentialSchemaEntity = (
+                credential_offer_entity.credential_schema
+            )
+
+            if (
+                credential_offer_entity.credential_status
+                == CredentialStatuses.Pending.value
+            ):
+                raise CredentialPendingError("Credential is not available yet")
+
+            credential_id = f"urn:did:{credential_offer_entity.id}"
+            credential_type = [
+                "VerifiableCredential",
+                "VerifiableAttestation",
+                credential_schema_entity.credential_type,
+            ]
+            credential_context = ["https://www.w3.org/2018/credentials/v1"]
+            credential_schema = [
+                {
+                    "id": "https://api-conformance.ebsi.eu/trusted-schemas-registry/v2/schemas/z3MgUFUkb722uq4x3dv5yAJmnNmzDFeK5UC8x83QoeLJM",
+                    "type": "FullJsonSchemaValidator2021",
+                }
+            ]
+            credential_subject = json.loads(
+                credential_offer_entity.data_attribute_values
+            )
+            credential_subject["id"] = credential_offer_entity.client_id
+            kid = f"{self.key_did.did}#{self.key_did._method_specific_id}"
+            jti = credential_id
+            iss = self.key_did.did
+            sub = credential_offer_entity.client_id
+            to_be_issued_credential = self._create_credential_token(
+                credential_id=credential_id,
+                credential_type=credential_type,
+                credential_context=credential_context,
+                credential_subject=credential_subject,
+                credential_status=None,
+                terms_of_use=None,
+                credential_schema=credential_schema,
+                kid=kid,
+                jti=jti,
+                iss=iss,
+                sub=sub,
+                key=self.key_did._key,
+                credential_issuer=self.key_did.did,
+            )
+
+            credential_response = CredentialResponse(
+                format="jwt_vc", credential=to_be_issued_credential
+            )
+
+            return credential_response.to_dict()
 
     async def issue_credential(
         self,
@@ -996,6 +1090,10 @@ class LegalEntityService:
                 key=self.key_did._key,
                 credential_issuer=self.ebsi_did.did,
             )
+
+            credential_response = CredentialResponse(
+                format="jwt_vc", credential=to_be_issued_credential
+            )
         else:
             if not access_token:
                 raise InvalidAccessTokenError(
@@ -1014,10 +1112,6 @@ class LegalEntityService:
                 credential_schema_entity: CredentialSchemaEntity = (
                     credential_offer_entity.credential_schema
                 )
-                if credential_offer_entity is None:
-                    raise InvalidAccessTokenError(
-                        f"Invalid access token {access_token}"
-                    )
 
                 AuthnService.verify_access_token(
                     token=access_token,
@@ -1026,46 +1120,58 @@ class LegalEntityService:
                     key=self.key_did._key,
                 )
 
-                credential_id = f"urn:did:{credential_offer_entity.id}"
-                credential_type = [
-                    "VerifiableCredential",
-                    "VerifiableAttestation",
-                    credential_schema_entity.credential_type,
-                ]
-                credential_context = ["https://www.w3.org/2018/credentials/v1"]
-                credential_schema = [
-                    {
-                        "id": "https://api-conformance.ebsi.eu/trusted-schemas-registry/v2/schemas/z3MgUFUkb722uq4x3dv5yAJmnNmzDFeK5UC8x83QoeLJM",
-                        "type": "FullJsonSchemaValidator2021",
-                    }
-                ]
-                credential_subject = json.loads(
-                    credential_offer_entity.data_attribute_values
-                )
-                credential_subject["id"] = credential_offer_entity.client_id
-                kid = f"{self.key_did.did}#{self.key_did._method_specific_id}"
-                jti = credential_id
-                iss = self.key_did.did
-                sub = credential_offer_entity.client_id
-                to_be_issued_credential = self._create_credential_token(
-                    credential_id=credential_id,
-                    credential_type=credential_type,
-                    credential_context=credential_context,
-                    credential_subject=credential_subject,
-                    credential_status=None,
-                    terms_of_use=None,
-                    credential_schema=credential_schema,
-                    kid=kid,
-                    jti=jti,
-                    iss=iss,
-                    sub=sub,
-                    key=self.key_did._key,
-                    credential_issuer=self.key_did.did,
-                )
+                if (
+                    credential_offer_entity.issuance_mode
+                    == CredentialIssuanceModes.Deferred.value
+                ):
+                    acceptance_token = str(uuid.uuid4())
+                    credential_offer_entity = repo.update(
+                        id=credential_offer_entity.id, acceptance_token=acceptance_token
+                    )
+                    credential_response = AcceptanceTokenResponse(
+                        acceptance_token=acceptance_token
+                    )
+                else:
+                    credential_id = f"urn:did:{credential_offer_entity.id}"
+                    credential_type = [
+                        "VerifiableCredential",
+                        "VerifiableAttestation",
+                        credential_schema_entity.credential_type,
+                    ]
+                    credential_context = ["https://www.w3.org/2018/credentials/v1"]
+                    credential_schema = [
+                        {
+                            "id": "https://api-conformance.ebsi.eu/trusted-schemas-registry/v2/schemas/z3MgUFUkb722uq4x3dv5yAJmnNmzDFeK5UC8x83QoeLJM",
+                            "type": "FullJsonSchemaValidator2021",
+                        }
+                    ]
+                    credential_subject = json.loads(
+                        credential_offer_entity.data_attribute_values
+                    )
+                    credential_subject["id"] = credential_offer_entity.client_id
+                    kid = f"{self.key_did.did}#{self.key_did._method_specific_id}"
+                    jti = credential_id
+                    iss = self.key_did.did
+                    sub = credential_offer_entity.client_id
+                    to_be_issued_credential = self._create_credential_token(
+                        credential_id=credential_id,
+                        credential_type=credential_type,
+                        credential_context=credential_context,
+                        credential_subject=credential_subject,
+                        credential_status=None,
+                        terms_of_use=None,
+                        credential_schema=credential_schema,
+                        kid=kid,
+                        jti=jti,
+                        iss=iss,
+                        sub=sub,
+                        key=self.key_did._key,
+                        credential_issuer=self.key_did.did,
+                    )
 
-        credential_response = CredentialResponse(
-            format="jwt_vc", credential=to_be_issued_credential
-        )
+                    credential_response = CredentialResponse(
+                        format="jwt_vc", credential=to_be_issued_credential
+                    )
 
         return credential_response.to_dict()
 
@@ -1150,6 +1256,79 @@ class LegalEntityService:
         )
         return credential_response.to_dict()
 
+    async def update_deferred_credential_offer_with_data_attribute_values(
+        self,
+        credential_schema_id: str,
+        credential_offer_id: str,
+        data_attribute_values: dict,
+    ) -> Union[dict, None]:
+        assert self.credential_offer_repository, "Credential offer repository not found"
+
+        with self.credential_offer_repository as repo:
+            credential_offer_entity = repo.get_by_id_and_credential_schema_id(
+                credential_offer_id, credential_schema_id
+            )
+            if credential_offer_entity is None:
+                raise UpdateCredentialOfferError(
+                    f"Credential offer with id {credential_offer_id} not found"
+                )
+
+            if (
+                credential_offer_entity.issuance_mode
+                != CredentialIssuanceModes.Deferred.value
+            ):
+                raise UpdateCredentialOfferError(
+                    f"Credential offer with id {credential_offer_id} is not in deferred issuance mode"
+                )
+
+            if (
+                credential_offer_entity.credential_status
+                != CredentialStatuses.Pending.value
+            ):
+                raise UpdateCredentialOfferError(
+                    f"Credential offer with id {credential_offer_id} is not in pending status"
+                )
+
+            credential_schema_entity: CredentialSchemaEntity = (
+                credential_offer_entity.credential_schema
+            )
+            if data_attribute_values:
+                data_attributes = json.loads(credential_schema_entity.data_attributes)
+                self._validate_data_attribute_values_against_data_attributes(
+                    data_attribute_values, data_attributes
+                )
+
+            credential_offer_entity = repo.update(
+                credential_offer_id,
+                data_attribute_values=json.dumps(data_attribute_values),
+                credential_status=CredentialStatuses.Ready.value,
+            )
+            return credential_offer_entity.to_dict()
+
+    async def update_credential_offer_from_issuer_state_jwt(
+        self, issuer_state: str, **kwargs
+    ) -> Union[CredentialOfferEntity, None]:
+        assert self.credential_offer_repository, "Credential offer repository not found"
+
+        issuer_state_decoded = decode_header_and_claims_in_jwt(issuer_state)
+        IssuerService.verify_issuer_state(issuer_state, self.key_did._key)
+
+        credential_offer_id = issuer_state_decoded.claims.get("credential_offer_id")
+
+        with self.credential_offer_repository as repo:
+            credential_offer_entity = repo.get_by_id(credential_offer_id)
+            if credential_offer_entity is None:
+                raise UpdateCredentialOfferError(
+                    f"Credential offer with id {credential_offer_id} not found"
+                )
+
+            if credential_offer_entity.is_pre_authorised:
+                raise CredentialOfferIsPreAuthorizedError(
+                    f"Credential offer with id {credential_offer_id} is already pre-authorized"
+                )
+
+            return repo.update(credential_offer_id, **kwargs)
+
     async def prepare_redirect_url_with_id_token_request(
         self, credential_offer_id: str, auth_req: AuthorizationRequestQueryParams
     ) -> str:
@@ -1216,7 +1395,8 @@ class LegalEntityService:
 
     async def get_first_legal_entity(self) -> Union[LegalEntityEntity, None]:
         assert self.legal_entity_repository, "Legal entity repository not found"
-        return self.legal_entity_repository.get_first()
+        with self.legal_entity_repository as repo:
+            return repo.get_first()
 
     async def create_credential_schema(
         self, credential_type: str, data_attributes: List[dict]
@@ -1257,16 +1437,51 @@ class LegalEntityService:
         with self.credential_schema_repository as repo:
             return repo.delete(credential_schema_id)
 
+    def _validate_data_attribute_values_against_data_attributes(
+        self, data_attribute_values: dict, data_attributes: List[dict]
+    ):
+        if len(data_attributes) != len(data_attribute_values):
+            raise ValidateDataAttributeValuesAgainstDataAttributesError(
+                f"Number of data attributes in schema ({len(data_attributes)}) does not match number of data attribute values ({len(data_attribute_values)})"
+            )
+
+        for data_attribute in data_attributes:
+            if data_attribute.get("attribute_name") not in data_attribute_values.keys():
+                raise ValidateDataAttributeValuesAgainstDataAttributesError(
+                    f"Data attribute value for {data_attribute.get('attribute_name')} not found"
+                )
+
     async def create_credential_offer(
         self,
         credential_schema_id: str,
-        data_attribute_values: dict,
         issuance_mode: str,
+        is_pre_authorised: bool,
+        user_pin: Optional[str] = None,
+        client_id: Optional[str] = None,
+        data_attribute_values: Optional[dict] = None,
     ) -> dict:
         assert self.credential_offer_repository, "Credential offer repository not found"
         assert (
             self.credential_schema_repository
         ), "Credential schema repository not found"
+
+        if is_pre_authorised and not user_pin:
+            raise UserPinRequiredError(
+                "User pin is required for pre-authorised credential offers"
+            )
+
+        if is_pre_authorised and not client_id:
+            raise ClientIdRequiredError(
+                "Client id is required for pre-authorised credential offers"
+            )
+
+        if (
+            issuance_mode == CredentialIssuanceModes.InTime
+            and not data_attribute_values
+        ):
+            raise CreateCredentialOfferError(
+                "Data attribute values are required for in time issuance"
+            )
 
         with self.credential_schema_repository as repo:
             credential_schema_entity = repo.get_by_id(credential_schema_id)
@@ -1275,42 +1490,63 @@ class LegalEntityService:
                     f"Credential schema with id {credential_schema_id} not found"
                 )
 
-        data_attributes = json.loads(credential_schema_entity.data_attributes)
-        if len(data_attributes) != len(data_attribute_values):
-            raise CreateCredentialOfferError(
-                f"Number of data attributes in schema ({len(data_attributes)}) does not match number of data attribute values ({len(data_attribute_values)})"
+        if data_attribute_values:
+            data_attributes = json.loads(credential_schema_entity.data_attributes)
+            self._validate_data_attribute_values_against_data_attributes(
+                data_attribute_values, data_attributes
             )
 
-        for data_attribute in data_attributes:
-            if data_attribute.get("attribute_name") not in data_attribute_values.keys():
-                raise CreateCredentialOfferError(
-                    f"Data attribute value for {data_attribute.get('attribute_name')} not found"
-                )
         iat = int(time.time())
         exp = iat + 3600
 
         with self.credential_offer_repository as repo:
             credential_offer_entity = repo.create(
                 credential_schema_id=credential_schema_entity.id,
-                data_attribute_values=json.dumps(data_attribute_values),
+                data_attribute_values=json.dumps(data_attribute_values)
+                if data_attribute_values
+                else None,
                 issuance_mode=issuance_mode,
+                is_pre_authorised=is_pre_authorised,
+                user_pin=user_pin,
+                client_id=client_id,
+                credential_status=CredentialStatuses.Ready.value
+                if data_attribute_values
+                else CredentialStatuses.Pending.value,
             )
 
-            issuer_state = IssuerService.create_issuer_state(
-                iss=self.key_did.did,
-                aud=self.key_did.did,
-                sub=self.key_did.did,
-                iat=iat,
-                nbf=iat,
-                exp=exp,
-                kid=f"{self.key_did.did}#{self.key_did._method_specific_id}",
-                key=self.key_did._key,
-                credential_offer_id=credential_offer_entity.id,
-            )
+            if is_pre_authorised:
+                pre_authorised_code = IssuerService.create_pre_authorised_code(
+                    iss=self.key_did.did,
+                    aud=self.key_did.did,
+                    sub=self.key_did.did,
+                    iat=iat,
+                    nbf=iat,
+                    exp=exp,
+                    kid=f"{self.key_did.did}#{self.key_did._method_specific_id}",
+                    key=self.key_did._key,
+                    credential_offer_id=credential_offer_entity.id,
+                )
 
-            credential_offer_entity = repo.update(
-                id=credential_offer_entity.id, issuer_state=issuer_state
-            )
+                credential_offer_entity = repo.update(
+                    id=credential_offer_entity.id,
+                    pre_authorised_code=pre_authorised_code,
+                )
+            else:
+                issuer_state = IssuerService.create_issuer_state(
+                    iss=self.key_did.did,
+                    aud=self.key_did.did,
+                    sub=self.key_did.did,
+                    iat=iat,
+                    nbf=iat,
+                    exp=exp,
+                    kid=f"{self.key_did.did}#{self.key_did._method_specific_id}",
+                    key=self.key_did._key,
+                    credential_offer_id=credential_offer_entity.id,
+                )
+
+                credential_offer_entity = repo.update(
+                    id=credential_offer_entity.id, issuer_state=issuer_state
+                )
         return credential_offer_entity.to_dict()
 
     async def delete_credential_offer(self, credential_offer_id: str) -> bool:
@@ -1345,26 +1581,6 @@ class LegalEntityService:
             credential_offer_entity = repo.get_by_id(credential_offer_id)
             return credential_offer_entity
 
-    async def update_credential_offer_by_id(
-        self, issuer_state: str, **kwargs
-    ) -> Union[CredentialOfferEntity, None]:
-        assert self.credential_offer_repository, "Credential offer repository not found"
-
-        issuer_state_decoded = decode_header_and_claims_in_jwt(issuer_state)
-        IssuerService.verify_issuer_state(issuer_state, self.key_did._key)
-
-        credential_offer_id = issuer_state_decoded.claims.get("credential_offer_id")
-
-        with self.credential_offer_repository as repo:
-            credential_offer_entity = repo.get_by_id(credential_offer_id)
-
-            if credential_offer_entity is None:
-                raise UpdateCredentialOfferError(
-                    f"Credential offer with id {credential_offer_id} not found"
-                )
-
-            return repo.update(credential_offer_id, **kwargs)
-
     async def prepare_redirect_url_with_authorisation_code_and_state(
         self, id_token_response: str, state: str
     ) -> str:
@@ -1383,6 +1599,11 @@ class LegalEntityService:
                     f"Invalid state {state} in ID token response"
                 )
 
+            if credential_offer_entity.is_pre_authorised:
+                raise CredentialOfferIsPreAuthorizedError(
+                    f"Credential offer with id {credential_offer_entity.id} is already pre-authorized"
+                )
+
             # Create authorisation code and new state and save to db.
             authorisation_code = str(uuid.uuid4())
             authorisation_code_state = str(uuid.uuid4())
@@ -1396,27 +1617,65 @@ class LegalEntityService:
             return redirect_url
 
     async def create_access_token(
-        self, grant_type: str, code: str, client_id: str, code_verifier: str
+        self,
+        grant_type: Optional[str] = None,
+        code: Optional[str] = None,
+        client_id: Optional[str] = None,
+        code_verifier: Optional[str] = None,
+        user_pin: Optional[str] = None,
+        pre_authorised_code: Optional[str] = None,
     ) -> dict:
-        assert grant_type in ["authorization_code"], "Invalid grant type"
-        assert code, "Code not found"
-        assert client_id, "Client id not found"
-        assert code_verifier, "Code verifier not found"
+        assert grant_type in [
+            authorisation_grant.value.grant_type
+            for authorisation_grant in AuthorisationGrants
+        ], "Invalid grant type"
 
         # Query credential offer by authorisation code
         with self.credential_offer_repository as repo:
-            credential_offer_entity = repo.get_by_authorisation_code(code)
-            if credential_offer_entity is None:
-                raise InvalidAuthorisationCodeError(
-                    f"Invalid authorisation code {code}"
+            if grant_type == AuthorisationGrants.PreAuthorisedCode.value.grant_type:
+                assert user_pin, "User pin not found"
+                assert pre_authorised_code, "Pre-authorised code not found"
+
+                IssuerService.verify_pre_authorised_code(
+                    token=pre_authorised_code, key=self.key_did._key
                 )
 
-            if credential_offer_entity.client_id != client_id:
-                raise InvalidClientError(f"Invalid client {client_id}")
+                pre_authorised_code_decoded = decode_header_and_claims_in_jwt(
+                    pre_authorised_code
+                )
+                credential_offer_id = pre_authorised_code_decoded.claims.get(
+                    "credential_offer_id"
+                )
+                credential_offer_entity = repo.get_by_id(credential_offer_id)
+                if credential_offer_entity is None:
+                    raise InvalidPreAuthorisedCodeError(
+                        f"Invalid pre-authorised code {pre_authorised_code}"
+                    )
 
-            code_challenge_to_be_verified = generate_code_challenge(code_verifier)
-            if code_challenge_to_be_verified != credential_offer_entity.code_challenge:
-                raise InvalidCodeVerifierError(f"Invalid code verifier {code_verifier}")
+                if credential_offer_entity.user_pin != user_pin:
+                    raise InvalidUserPinError(f"Invalid user pin {user_pin}")
+            else:
+                assert code, "Code not found"
+                assert client_id, "Client id not found"
+                assert code_verifier, "Code verifier not found"
+
+                credential_offer_entity = repo.get_by_authorisation_code(code)
+                if credential_offer_entity is None:
+                    raise InvalidAuthorisationCodeError(
+                        f"Invalid authorisation code {code}"
+                    )
+
+                if credential_offer_entity.client_id != client_id:
+                    raise InvalidClientError(f"Invalid client {client_id}")
+
+                code_challenge_to_be_verified = generate_code_challenge(code_verifier)
+                if (
+                    code_challenge_to_be_verified
+                    != credential_offer_entity.code_challenge
+                ):
+                    raise InvalidCodeVerifierError(
+                        f"Invalid code verifier {code_verifier}"
+                    )
 
             iat = int(time.time())
             exp = iat + 86400
@@ -1476,12 +1735,21 @@ class LegalEntityService:
                         },
                     }
                 ],
-                "grants": {
-                    "authorization_code": {
-                        "issuer_state": credential_offer_entity.issuer_state
-                    }
-                },
             }
+
+            if credential_offer_entity.is_pre_authorised:
+                credential_offer_by_reference["grants"] = {
+                    AuthorisationGrants.PreAuthorisedCode.value.grant_type: {
+                        AuthorisationGrants.PreAuthorisedCode.value.grant_data: credential_offer_entity.pre_authorised_code
+                    },
+                    "user_pin_required": True,
+                }
+            else:
+                credential_offer_by_reference["grants"] = {
+                    AuthorisationGrants.PreAuthorisedCode.value.grant_type: {
+                        AuthorisationGrants.PreAuthorisedCode.value.grant_data: credential_offer_entity.issuer_state
+                    }
+                }
             return credential_offer_by_reference
 
     async def initiate_credential_offer(

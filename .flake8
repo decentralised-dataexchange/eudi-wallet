@@ -2,3 +2,4 @@
 # it's not a bug that we aren't using all of hacking
 extend-ignore =
     E501
+    F722

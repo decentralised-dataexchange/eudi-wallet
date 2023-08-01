@@ -28,8 +28,13 @@ class CredentialOfferEntity(Base):
     )
     is_accessed = Column(Boolean, default=False)
 
-    data_attribute_values = Column(Text, nullable=False)
+    data_attribute_values = Column(Text, nullable=True)
+
     issuance_mode = Column(String, nullable=False)
+    is_pre_authorised = Column(Boolean, default=False)
+
+    offer_status = Column(String, nullable=True)
+    credential_status = Column(String, nullable=True)
 
     issuer_state = Column(String, nullable=True)
     authorisation_request_state = Column(String, nullable=True)
@@ -42,9 +47,11 @@ class CredentialOfferEntity(Base):
     code_challenge_method = Column(String, nullable=True)
     redirect_uri = Column(String, nullable=True)
 
+    acceptance_token = Column(String, nullable=True)
+
     authorisation_code = Column(String, nullable=True)
-    pre_authorized_code = Column(String, nullable=True)
-    user_pin = Column(String, nullable=True)
+    pre_authorised_code = Column(String, nullable=True)
+    user_pin = Column(String(length=4), nullable=True)
 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(

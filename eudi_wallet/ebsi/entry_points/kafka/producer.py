@@ -1,18 +1,11 @@
 from logging import Logger
 
-from confluent_kafka import Producer
+from aiokafka import AIOKafkaProducer
 
 
-def produce(message: str, topic: str, producer: Producer, logger: Logger):
-    def delivery_report(err, msg):
-        if err is not None:
-            logger.debug(f"Message delivery failed: {err}")
-        else:
-            logger.debug(f"Message delivered to {msg.topic()} [{msg.partition()}]")
-
-    producer.produce(topic, message, callback=delivery_report)
-    producer.flush()
-
-
-if __name__ == "__main__":
-    produce()
+async def produce(message: str, topic: str, producer: AIOKafkaProducer, logger: Logger):
+    try:
+        await producer.send_and_wait(topic, message.encode("utf-8"))
+        logger.debug(f"Message delivered to {topic}")
+    except Exception as err:
+        logger.debug(f"Message delivery failed: {err}")

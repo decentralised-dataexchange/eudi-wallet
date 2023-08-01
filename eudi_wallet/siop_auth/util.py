@@ -1,26 +1,25 @@
+import base64
+import dataclasses
+import hashlib
 import hmac
 import json
-import sslcrypto
-import typing
-import dataclasses
-import urllib.parse
-import hashlib
-import base64
 import secrets
 import string
-from enum import Enum
+import typing
+import urllib.parse
 from dataclasses import dataclass
+from enum import Enum
+
+import sslcrypto
 from coincurve import PublicKey
+
 from eudi_wallet.did_jwt import create_jwt, decode_jwt
 from eudi_wallet.did_jwt.signer_algorithm import ES256K_signer_algorithm
 from eudi_wallet.ethereum import Ethereum
-from eudi_wallet.util import (
-    http_call,
-    http_call_text,
-    http_call_text_redirects_disabled,
-    parse_query_string_parameters_from_url,
-    get_element_by_index_from_list,
-)
+from eudi_wallet.util import (get_element_by_index_from_list, http_call,
+                              http_call_text,
+                              http_call_text_redirects_disabled,
+                              parse_query_string_parameters_from_url)
 
 
 def get_audience(jwt):
@@ -174,6 +173,7 @@ class OpenIDCredentialIssuerConfig:
     credential_endpoint: str
     deferred_credential_endpoint: str
     credentials_supported: typing.List[Credential]
+    display: typing.Optional[str] = None
 
 
 async def fetch_openid_credential_issuer_configuration(
@@ -269,6 +269,7 @@ class CredentialTypes(Enum):
     CTWalletSamePreAuthorised = "CTWalletSamePreAuthorised"
     CTWalletCrossPreAuthorised = "CTWalletCrossPreAuthorised"
     CTWalletQualificationCredential = "CTWalletQualificationCredential"
+    CTIssueQualificationCredential = "CTIssueQualificationCredential"
 
 
 async def fetch_credential_offer(client_id: str, credential_type: CredentialTypes):
@@ -413,6 +414,7 @@ class AccessTokenResponse:
     id_token: str
     c_nonce: str
     c_nonce_expires_in: int
+    scope: typing.Optional[str] = None
 
 
 async def exchange_auth_code_for_access_token(

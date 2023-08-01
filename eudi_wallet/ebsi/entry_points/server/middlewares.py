@@ -1,12 +1,12 @@
 from aiohttp import web
 
-from eudi_wallet.ebsi.entry_points.server.utils import get_app_objects
+from eudi_wallet.ebsi.entry_points.server.utils import get_app_context
 
 
 async def logging_middleware(app, handler):
     async def middleware_handler(request):
-        app_objects = get_app_objects(app)
-        logger = app_objects.logger
+        app_context = get_app_context(app)
+        logger = app_context.logger
 
         # Log the request
         logger.debug(f"Received request: {request.method} {request.path}")
@@ -42,8 +42,8 @@ async def logging_middleware(app, handler):
 
 async def error_middleware(app, handler):
     async def middleware_handler(request):
-        app_objects = get_app_objects(app)
-        logger = app_objects.logger
+        app_context = get_app_context(app)
+        logger = app_context.logger
 
         try:
             # Call the next middleware or route handler

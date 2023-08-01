@@ -7,7 +7,8 @@ import typing
 from jwcrypto import jwk, jwt
 
 from eudi_wallet.ebsi.exceptions.domain.issuer import (
-    CredentialRequestError, InvalidIssuerStateTokenError)
+    CredentialRequestError, ExpiredPreAuthorisedCodeTokenError,
+    InvalidIssuerStateTokenError)
 from eudi_wallet.ebsi.services.domain.utils.jwt import get_alg_for_key
 from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.value_objects.domain.issuer import (
@@ -90,6 +91,51 @@ class IssuerService:
         token = jwt.JWT(header=header, claims=payload)
         token.make_signed_token(key)
         return token.serialize()
+
+    @staticmethod
+    def create_pre_authorised_code(
+        iss: str,
+        aud: str,
+        sub: str,
+        iat: int,
+        nbf: int,
+        exp: int,
+        kid: str,
+        key: jwk.JWK,
+        credential_offer_id: str,
+        **kwargs,
+    ) -> str:
+        header = {"typ": "JWT", "alg": get_alg_for_key(key), "kid": kid}
+
+        iat = int(time.time())
+        nbf = iat
+        exp = iat + 86400
+        jwt_payload = {
+            "iss": iss,
+            "aud": aud,
+            "sub": sub,
+            "iat": iat,
+            "nbf": nbf,
+            "exp": exp,
+            "credential_offer_id": credential_offer_id,
+            **kwargs,
+        }
+        token = jwt.JWT(header=header, claims=jwt_payload)
+        token.make_signed_token(key)
+
+        return token.serialize()
+
+    @staticmethod
+    def verify_pre_authorised_code(
+        token: str,
+        key: jwk.JWK,
+    ) -> None:
+        try:
+            _ = jwt.JWT(key=key, jwt=token)
+        except jwt.JWTExpired:
+            raise ExpiredPreAuthorisedCodeTokenError(
+                f"Issuer pre-authorised code expired: {token}"
+            )
 
     @staticmethod
     def create_issuer_state(

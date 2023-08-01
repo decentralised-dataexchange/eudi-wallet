@@ -26,8 +26,8 @@ dataclasses-json = "^0.5.9"
 web3 = "^6.5.0"
 sqlalchemy = "^2.0.19"
 pytz = "^2023.3"
-confluent-kafka = "2.1.1"
 pydantic = "^2.1.1"
+aiokafka = "^0.8.1"
 
 [tool.poetry.dev-dependencies]
 jupyter = "^1.0.0"

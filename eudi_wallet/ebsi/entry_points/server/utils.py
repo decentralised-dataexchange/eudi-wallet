@@ -2,7 +2,7 @@ import dataclasses
 import typing
 from logging import Logger
 
-from confluent_kafka import Producer
+from aiokafka import AIOKafkaProducer
 from sqlalchemy.orm import Session
 
 from eudi_wallet.ebsi.value_objects.domain.discovery import (
@@ -10,19 +10,19 @@ from eudi_wallet.ebsi.value_objects.domain.discovery import (
 
 
 @dataclasses.dataclass
-class AppObjects:
+class AppContext:
     credential_issuer_configuration: typing.Optional[
         OpenIDCredentialIssuerConfig
     ] = None
     auth_server_configuration: typing.Optional[OpenIDAuthServerConfig] = None
     logger: typing.Optional[Logger] = None
-    kafka_producer: typing.Optional[Producer] = None
+    kafka_producer: typing.Optional[AIOKafkaProducer] = None
     kafka_topic: typing.Optional[str] = None
     db_session: typing.Optional[Session] = None
 
 
-def get_app_objects(app) -> AppObjects:
-    return AppObjects(
+def get_app_context(app) -> AppContext:
+    return AppContext(
         credential_issuer_configuration=app["credential_issuer_configuration"],
         auth_server_configuration=app["auth_server_configuration"],
         logger=app["logger"],

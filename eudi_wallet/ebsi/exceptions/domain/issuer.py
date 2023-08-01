@@ -8,3 +8,11 @@ class CredentialDeserializationError(Exception):
 
 class InvalidIssuerStateTokenError(Exception):
     pass
+
+
+class ExpiredPreAuthorisedCodeTokenError(Exception):
+    pass
+
+
+class CredentialPendingError(Exception):
+    pass

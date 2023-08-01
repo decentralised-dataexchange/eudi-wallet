@@ -3,7 +3,7 @@ import json
 import logging
 
 import click
-from confluent_kafka import Consumer, KafkaError
+from aiokafka import AIOKafkaConsumer
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -25,6 +25,36 @@ handler.setFormatter(formatter)
 logger.addHandler(handler)
 
 
+async def consume(kafka_broker_address, kafka_topic):
+    consumer = AIOKafkaConsumer(
+        kafka_topic,
+        bootstrap_servers=kafka_broker_address,
+        group_id="consumer_group_id",
+        auto_offset_reset="earliest",
+    )
+
+    await consumer.start()
+
+    engine = create_engine("sqlite:///wallet.db")
+    db_session = sessionmaker(bind=engine)
+
+    try:
+        # Consume messages
+        async for msg in consumer:
+            msg_dict = json.loads(msg.value.decode("utf-8"))
+            event_wrapper = EventWrapper.from_dict(msg_dict)
+            event_type = event_wrapper.event_type
+
+            logger.debug(f"Received message of type: {event_type}")
+
+            if event_type == EventTypes.OnboardTrustedIssuer.value:
+                event = OnboardTrustedIssuerEvent.from_dict(event_wrapper.payload)
+                await handle_event_onboard_trusted_issuer(event, logger, db_session)
+    finally:
+        # Will leave consumer group; perform autocommit if enabled.
+        await consumer.stop()
+
+
 @click.command()
 @click.option(
     "--kafka-broker-address",
@@ -40,46 +70,20 @@ logger.addHandler(handler)
     prompt="Enter your kafka topic",
     help="Topic to consume kafka events from",
 )
-def consume(kafka_broker_address, kafka_topic):
-    conf = {
-        "bootstrap.servers": kafka_broker_address,
-        "group.id": "consumer_group_id",
-        "auto.offset.reset": "earliest",
-    }
+def main(kafka_broker_address, kafka_topic):
+    loop = asyncio.get_event_loop()
 
-    consumer = Consumer(conf)
-    consumer.subscribe([kafka_topic])
+    consume_task = loop.create_task(consume(kafka_broker_address, kafka_topic))
 
-    engine = create_engine("sqlite:///wallet.db")
-    db_session = sessionmaker(bind=engine)
-
-    while True:
-        msg = consumer.poll(1.0)
-
-        if msg is None:
-            continue
-        if msg.error():
-            if msg.error().code() == KafkaError._PARTITION_EOF:
-                continue
-            else:
-                print(f"Error: {msg.error()}")
-                break
-
-        msg_dict = json.loads(msg.value().decode("utf-8"))
-        event_wrapper = EventWrapper.from_dict(msg_dict)
-        event_type = event_wrapper.event_type
-
-        logger.debug(f"Received message of type: {event_type}")
-
-        if event_type == EventTypes.OnboardTrustedIssuer.value:
-            event = OnboardTrustedIssuerEvent.from_dict(event_wrapper.payload)
-            task = asyncio.ensure_future(
-                handle_event_onboard_trusted_issuer(event, logger, db_session)
-            )
-            asyncio.get_event_loop().run_until_complete(task)
-
-    consumer.close()
+    try:
+        loop.run_until_complete(consume_task)
+    except KeyboardInterrupt:
+        print("CTRL+C Pressed. Shutting down gracefully...")
+        consume_task.cancel()
+        loop.run_until_complete(consume_task)
+    finally:
+        loop.close()
 
 
 if __name__ == "__main__":
-    consume()
+    main()

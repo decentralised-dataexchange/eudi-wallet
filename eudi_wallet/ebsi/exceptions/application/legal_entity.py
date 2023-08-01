@@ -6,6 +6,10 @@ class CreateCredentialOfferError(Exception):
     pass
 
 
+class ValidateDataAttributeValuesAgainstDataAttributesError(Exception):
+    pass
+
+
 class UpdateCredentialOfferError(Exception):
     pass
 
@@ -15,6 +19,14 @@ class InvalidStateInIDTokenResponseError(Exception):
 
 
 class InvalidAuthorisationCodeError(Exception):
+    pass
+
+
+class InvalidPreAuthorisedCodeError(Exception):
+    pass
+
+
+class InvalidUserPinError(Exception):
     pass
 
 
@@ -31,4 +43,16 @@ class CreateAccessTokenError(Exception):
 
 
 class CredentialOfferNotFoundError(Exception):
+    pass
+
+
+class CredentialOfferIsPreAuthorizedError(Exception):
+    pass
+
+
+class UserPinRequiredError(Exception):
+    pass
+
+
+class ClientIdRequiredError(Exception):
     pass

@@ -1,6 +1,8 @@
 def get_well_known_openid_credential_issuer_config(wallet_domain: str):
     # For additional fields like logo, background color, text color e.t.c
     # Check https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#name-credential-issuer-metadata
+
+    # TODO: Populate support credential schemas from db.
     return {
         "credential_issuer": f"{wallet_domain}/issuer",
         "authorization_server": f"{wallet_domain}/auth",
@@ -21,6 +23,38 @@ def get_well_known_openid_credential_issuer_config(wallet_domain: str):
                 "types": [
                     "VerifiableCredential",
                     "VerifiableAttestation",
+                    "CTWalletSameDeferred",
+                ],
+                "trust_framework": {
+                    "name": "ebsi",
+                    "type": "Accreditation",
+                    "uri": "TIR link towards accreditation",
+                },
+                "display": [
+                    {"name": "Conformance tests deferred", "locale": "en-GB"}
+                ],
+            },
+            {
+                "format": "jwt_vc",
+                "types": [
+                    "VerifiableCredential",
+                    "VerifiableAttestation",
+                    "CTWalletSamePreAuthorised",
+                ],
+                "trust_framework": {
+                    "name": "ebsi",
+                    "type": "Accreditation",
+                    "uri": "TIR link towards accreditation",
+                },
+                "display": [
+                    {"name": "Conformance tests pre-authorised", "locale": "en-GB"}
+                ],
+            },
+            {
+                "format": "jwt_vc",
+                "types": [
+                    "VerifiableCredential",
+                    "VerifiableAttestation",
                     "CTWalletSameInTime",
                 ],
                 "trust_framework": {
@@ -29,7 +63,7 @@ def get_well_known_openid_credential_issuer_config(wallet_domain: str):
                     "uri": "TIR link towards accreditation",
                 },
                 "display": [
-                    {"name": "Conformance test same in-time", "locale": "en-GB"}
+                    {"name": "Conformance tests in-time", "locale": "en-GB"}
                 ],
             },
             {

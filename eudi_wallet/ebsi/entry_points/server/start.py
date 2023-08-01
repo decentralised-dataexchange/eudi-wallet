@@ -4,7 +4,7 @@ import logging
 import click
 from aiohttp import web
 from aiohttp.web_request import Request
-from confluent_kafka import Producer
+from aiokafka import AIOKafkaProducer
 from pyngrok import ngrok  # type: ignore
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -104,13 +104,15 @@ class ServerTeardown:
 def main(port, auth_token, kafka_broker_address, kafka_topic):
     logger = AppLogger(__name__).logger
     db_session = DBSetup("sqlite:///wallet.db").setup_db()
-    conf = {"bootstrap.servers": kafka_broker_address}
-    producer = Producer(conf)
+
+    loop = asyncio.get_event_loop()
+
+    producer = AIOKafkaProducer(bootstrap_servers=kafka_broker_address, loop=loop)
+    loop.run_until_complete(producer.start())
 
     server = ServerSetup(db_session, producer, logger, kafka_topic)
     ngrok_tunnel = NgrokSetup(auth_token)
 
-    loop = asyncio.get_event_loop()
     runner, site = loop.run_until_complete(server.start_server(port))
 
     try:
@@ -123,6 +125,7 @@ def main(port, auth_token, kafka_broker_address, kafka_topic):
 
     finally:
         loop.run_until_complete(server.stop(runner, site))
+        loop.run_until_complete(producer.stop())
         loop.close()
 
         if "tunnel" in locals():
