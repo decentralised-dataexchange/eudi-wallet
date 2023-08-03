@@ -60,6 +60,40 @@ class IssuerService:
         token.make_signed_token(key)
         return token.serialize()
 
+    def create_vp_token_request(
+        self,
+        state: str,
+        iss: str,
+        aud: str,
+        exp: int,
+        response_type: str,
+        response_mode: str,
+        client_id: str,
+        redirect_uri: str,
+        scope: str,
+        nonce: str,
+        key_id: str,
+        key: jwk.JWK,
+        presentation_definition: dict,
+    ) -> str:
+        header = {"typ": "JWT", "alg": get_alg_for_key(key), "kid": key_id}
+        payload = {
+            "state": state,
+            "client_id": client_id,
+            "redirect_uri": redirect_uri,
+            "response_type": response_type,
+            "response_mode": response_mode,
+            "scope": scope,
+            "nonce": nonce,
+            "iss": iss,
+            "aud": aud,
+            "exp": exp,
+            "presentation_definition": presentation_definition,
+        }
+        token = jwt.JWT(header=header, claims=payload)
+        token.make_signed_token(key)
+        return token.serialize()
+
     def create_id_token_request(
         self,
         state: str,
@@ -172,6 +206,16 @@ class IssuerService:
 
     @staticmethod
     def verify_issuer_state(
+        token: str,
+        key: jwk.JWK,
+    ) -> None:
+        try:
+            _ = jwt.JWT(key=key, jwt=token)
+        except jwt.JWTExpired:
+            raise InvalidIssuerStateTokenError(f"Issuer state token expired: {token}")
+
+    @staticmethod
+    def verify_vp_token(
         token: str,
         key: jwk.JWK,
     ) -> None:

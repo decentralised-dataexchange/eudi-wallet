@@ -40,8 +40,12 @@ class CredentialOfferEntity(Base):
     issuer_state = Column(String, nullable=True)
     authorisation_request_state = Column(String, nullable=True)
     id_token_request_state = Column(String, nullable=True)
-    authorisation_code_state = Column(String, nullable=True)
     id_token_request = Column(String, nullable=True)
+    authorisation_code_state = Column(String, nullable=True)
+
+    # FIXME: Temporary hack to handle verifiable presentations
+    vp_token_request_state = Column(String, nullable=True)
+    vp_token_request = Column(String, nullable=True)
 
     client_id = Column(String, nullable=True)
     code_challenge = Column(String, nullable=True)
@@ -63,7 +67,9 @@ class CredentialOfferEntity(Base):
     # Each status list can contain at-most 131,072 entries
     supports_revocation = Column(Boolean, default=False)
     is_revoked = Column(Boolean, default=False)
-    credential_revocation_status_list_index = Column(Integer, nullable=False, default=-1)
+    credential_revocation_status_list_index = Column(
+        Integer, nullable=False, default=-1
+    )
     credential_revocation_status_list_id = Column(
         String(36),
         ForeignKey("credential_revocation_status_list.id"),

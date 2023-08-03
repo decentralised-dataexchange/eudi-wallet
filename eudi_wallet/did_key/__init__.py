@@ -87,6 +87,15 @@ class KeyDid:
         self._did = "did:key:" + jwk_multibase
         self._method_specific_id = jwk_multibase
 
+    def method_specific_identifier_to_jwk(
+        self, method_specific_identifier: str
+    ) -> jwk.JWK:
+        decoded = multibase.decode(method_specific_identifier)
+        _, raw_data = multicodec.unwrap(decoded)
+        jwk_str = raw_data.decode("utf-8")
+        jwk_dict = json.loads(jwk_str)
+        return jwk.JWK(**jwk_dict)
+
     def generate_id_token(self, auth_server_uri: str, nonce: str) -> str:
         header = {
             "typ": "JWT",
@@ -186,5 +195,7 @@ class KeyDid:
     @property
     def public_key_hex(self) -> str:
         return binascii.hexlify(
-            json.dumps(self._public_key.export_public(as_dict=True), separators=(",", ":")).encode("utf-8")
+            json.dumps(
+                self._public_key.export_public(as_dict=True), separators=(",", ":")
+            ).encode("utf-8")
         ).decode()

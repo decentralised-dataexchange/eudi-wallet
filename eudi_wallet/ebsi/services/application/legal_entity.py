@@ -2,8 +2,9 @@ import json
 import time
 import urllib.parse
 import uuid
+from datetime import datetime
 from logging import Logger
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
@@ -1432,6 +1433,120 @@ class LegalEntityService:
                 )
                 return credential_offer_entity
 
+    async def prepare_redirect_url_with_vp_token_request(
+        self, credential_offer_id: str, client_metadata: dict, aud: str
+    ) -> str:
+        assert self.auth_domain, "Auth domain not found"
+        assert self.credential_offer_repository, "Credential offer repository not found"
+
+        iss_service = IssuerService(
+            self.credential_issuer_configuration.credential_endpoint,
+            logger=self.logger,
+        )
+        state = str(uuid.uuid4())
+        iss = self.auth_domain
+        exp = int(time.time()) + 3600
+        response_type = "vp_token"
+        response_mode = "direct_post"
+        client_id = self.auth_domain
+        redirect_uri = f"{self.auth_domain}/direct_post"
+        scope = "openid"
+        nonce = str(uuid.uuid4())
+        key = self.key_did._key
+        key_id = key.key_id
+        definition_id = str(uuid.uuid4())
+        input_descriptor_1_id = str(uuid.uuid4())
+        input_descriptor_2_id = str(uuid.uuid4())
+        input_descriptor_3_id = str(uuid.uuid4())
+        presentation_definition = {
+            "id": definition_id,
+            "format": {"jwt_vc": {"alg": ["ES256"]}, "jwt_vp": {"alg": ["ES256"]}},
+            "input_descriptors": [
+                {
+                    "id": input_descriptor_1_id,
+                    "constraints": {
+                        "fields": [
+                            {
+                                "path": ["$.type"],
+                                "filter": {
+                                    "type": "array",
+                                    "contains": {"const": "VerifiableAttestation"},
+                                },
+                            }
+                        ]
+                    },
+                },
+                {
+                    "id": input_descriptor_2_id,
+                    "constraints": {
+                        "fields": [
+                            {
+                                "path": ["$.type"],
+                                "filter": {
+                                    "type": "array",
+                                    "contains": {"const": "VerifiableAttestation"},
+                                },
+                            }
+                        ]
+                    },
+                },
+                {
+                    "id": input_descriptor_3_id,
+                    "constraints": {
+                        "fields": [
+                            {
+                                "path": ["$.type"],
+                                "filter": {
+                                    "type": "array",
+                                    "contains": {"const": "VerifiableAttestation"},
+                                },
+                            }
+                        ]
+                    },
+                },
+            ],
+        }
+        vp_token_request = iss_service.create_vp_token_request(
+            state=state,
+            iss=iss,
+            aud=aud,
+            exp=exp,
+            response_type=response_type,
+            response_mode=response_mode,
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            scope=scope,
+            nonce=nonce,
+            key_id=key_id,
+            key=key,
+            presentation_definition=presentation_definition,
+        )
+        # Save state to credential offer.
+        with self.credential_offer_repository as repo:
+            repo.update(
+                id=credential_offer_id,
+                vp_token_request_state=state,
+                vp_token_request=vp_token_request,
+            )
+        encoded_params = urllib.parse.urlencode(
+            {
+                "client_id": client_id,
+                "response_type": response_type,
+                "scope": scope,
+                "redirect_uri": redirect_uri,
+                "request": vp_token_request,
+                "response_mode": response_mode,
+                "state": state,
+            }
+        )
+        redirection_base_url = client_metadata.get("authorization_endpoint")
+        if redirection_base_url:
+            redirection_url = f"{redirection_base_url}?{encoded_params}"
+        else:
+            redirection_url = f"openid:?{encoded_params}"
+
+        return redirection_url
+
     async def prepare_redirect_url_with_id_token_request(
         self, credential_offer_id: str, client_metadata: dict
     ) -> str:
@@ -1695,23 +1810,96 @@ class LegalEntityService:
             credential_offer_entity = repo.get_by_id(credential_offer_id)
             return credential_offer_entity
 
+    async def _verify_vp_token(
+        self, vp_token: str, redirect_uri: str, presentation_submission: str, state: str
+    ) -> Tuple[str, bool]:
+        presentation_submission = json.loads(presentation_submission)
+
+        vp_token_decoded = decode_header_and_claims_in_jwt(vp_token)
+        kid = vp_token_decoded.headers.get("kid")
+        method_specific_identifier = kid.split("#")[1]
+        key = self.key_did.method_specific_identifier_to_jwk(method_specific_identifier)
+
+        IssuerService.verify_vp_token(vp_token, key)
+
+        vc_in_vp = vp_token_decoded.claims.get("vp").get("verifiableCredential")[0]
+        vc_in_vp_decoded = decode_header_and_claims_in_jwt(vc_in_vp)
+
+        vc = vc_in_vp_decoded.claims.get("vc")
+
+        valid_from = vc.get("validFrom")
+        valid_from = datetime.strptime(valid_from, "%Y-%m-%dT%H:%M:%SZ")
+        expiration_date = vc.get("expirationDate")
+        expiration_date = datetime.strptime(expiration_date, "%Y-%m-%dT%H:%M:%SZ")
+
+        current_datetime_utc = datetime.utcnow()
+
+        if current_datetime_utc > expiration_date:
+            error = "invalid_request"
+            descriptor_id = presentation_submission.get("descriptor_map")[0].get("id")
+            error_description = f"{descriptor_id} is expired"
+            return (
+                f"{redirect_uri}?error={error}&error_description={error_description}&state={state}",
+                False,
+            )
+
+        if current_datetime_utc < valid_from:
+            error = "invalid_request"
+            descriptor_id = presentation_submission.get("descriptor_map")[0].get("id")
+            error_description = f"{descriptor_id} is not yet valid"
+            return (
+                f"{redirect_uri}?error={error}&error_description={error_description}&state={state}",
+                False,
+            )
+
+        if vc.get("credentialStatus"):
+            # FIXME: Fetch status list and verify the credential status.
+            error = "invalid_request"
+            descriptor_id = presentation_submission.get("descriptor_map")[0].get("id")
+            error_description = f"{descriptor_id} is revoked"
+            return (
+                f"{redirect_uri}?error={error}&error_description={error_description}&state={state}",
+                False,
+            )
+
+        return "", True
+
     async def prepare_redirect_url_with_authorisation_code_and_state(
-        self, id_token_response: str, state: str
+        self,
+        id_token_response: Optional[str] = None,
+        state: Optional[str] = None,
+        vp_token_response: Optional[str] = None,
+        presentation_submission: Optional[str] = None,
     ) -> str:
         assert self.credential_offer_repository, "Credential offer repository not found"
-        assert id_token_response, "Id token response not found"
-        assert state, "State not found"
 
         # TODO: Validate id token response by generating JWK from client id.
         # if did:key identifier then obtain from method specific id, else obtain from /jwks endpoint
 
         # Query credential offer by id_token request state
         with self.credential_offer_repository as repo:
-            credential_offer_entity = repo.get_by_id_token_request_state(state)
-            if credential_offer_entity is None:
-                raise InvalidStateInIDTokenResponseError(
-                    f"Invalid state {state} in ID token response"
+            if id_token_response:
+                credential_offer_entity = repo.get_by_id_token_request_state(state)
+                if credential_offer_entity is None:
+                    raise InvalidStateInIDTokenResponseError(
+                        f"Invalid state {state} in ID token response"
+                    )
+            elif vp_token_response:
+                credential_offer_entity = repo.get_by_vp_token_request_state(state)
+                if credential_offer_entity is None:
+                    raise InvalidStateInIDTokenResponseError(
+                        f"Invalid state {state} in VP token response"
+                    )
+
+                redirect_url, is_verified = await self._verify_vp_token(
+                    vp_token_response,
+                    credential_offer_entity.redirect_uri,
+                    presentation_submission,
+                    credential_offer_entity.authorisation_request_state,
                 )
+                if not is_verified:
+                    # Redirects back with error and error_description in query params.
+                    return redirect_url
 
             if credential_offer_entity.is_pre_authorised:
                 raise CredentialOfferIsPreAuthorizedError(
@@ -1727,15 +1915,7 @@ class LegalEntityService:
                 authorisation_code_state=authorisation_code_state,
             )
 
-            params = {
-                "code": authorisation_code,
-                "state": credential_offer_entity.authorisation_request_state,
-            }
-            query_string = urllib.parse.urlencode(params)
-            redirect_url = urllib.parse.urljoin(
-                credential_offer_entity.redirect_uri, "?" + query_string
-            )
-            # redirect_url = f"{credential_offer_entity.redirect_uri}?code={authorisation_code}&state={credential_offer_entity.authorisation_request_state}"
+            redirect_url = f"{credential_offer_entity.redirect_uri}?code={authorisation_code}&state={credential_offer_entity.authorisation_request_state}"
             return redirect_url
 
     async def create_access_token(

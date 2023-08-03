@@ -4,8 +4,8 @@ def get_well_known_openid_credential_issuer_config(wallet_domain: str):
 
     # TODO: Populate support credential schemas from db.
     return {
-        "credential_issuer": f"{wallet_domain}/issuer",
-        "authorization_server": f"{wallet_domain}/auth",
+        "credential_issuer": f"{wallet_domain}",
+        "authorization_server": f"{wallet_domain}",
         "credential_endpoint": f"{wallet_domain}/credential",
         "deferred_credential_endpoint": f"{wallet_domain}/credential_deferred",
         "display": {
@@ -213,7 +213,7 @@ def get_well_known_openid_credential_issuer_config(wallet_domain: str):
 def get_well_known_authn_openid_config(wallet_domain: str):
     return {
         "redirect_uris": [f"{wallet_domain}/direct_post"],
-        "issuer": f"{wallet_domain}/auth",
+        "issuer": f"{wallet_domain}",
         "authorization_endpoint": f"{wallet_domain}/authorize",
         "token_endpoint": f"{wallet_domain}/token",
         "jwks_uri": f"{wallet_domain}/jwks",

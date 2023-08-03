@@ -174,9 +174,7 @@ async def handle_post_credential_request(request: Request, context: RequestConte
     return web.json_response(credential_response)
 
 
-@routes.post(
-    "/credential_deferred", name="handle_post_credential_deferred_request"
-)
+@routes.post("/credential_deferred", name="handle_post_credential_deferred_request")
 @inject_request_context()
 async def handle_post_credential_deferred_request(
     request: Request, context: RequestContext
@@ -260,6 +258,7 @@ async def handle_get_authorize(request: Request, context: RequestContext):
     code_challenge_method = auth_req.code_challenge_method
     authorisation_request = auth_req.request
     redirect_uri = auth_req.redirect_uri
+    scope = auth_req.scope
 
     try:
         # TODO: Credential offers should be accessed only once.
@@ -281,21 +280,34 @@ async def handle_get_authorize(request: Request, context: RequestContext):
         else:
             client_metadata = json.loads(auth_req.client_metadata)
 
-        redirect_url = await context.legal_entity_service.prepare_redirect_url_with_id_token_request(
-            credential_offer_id=credential_offer_entity.id,
-            client_metadata=client_metadata,
-        )
+        if scope == "openid ver_test:vp_token":
+            redirect_url = await context.legal_entity_service.prepare_redirect_url_with_vp_token_request(
+                credential_offer_id=credential_offer_entity.id,
+                client_metadata=client_metadata,
+                aud=client_id,
+            )
+        else:
+            redirect_url = await context.legal_entity_service.prepare_redirect_url_with_id_token_request(
+                credential_offer_id=credential_offer_entity.id,
+                client_metadata=client_metadata,
+            )
     except CredentialOfferIsPreAuthorizedError as e:
         raise web.HTTPBadRequest(text=str(e))
     except UpdateCredentialOfferError as e:
         raise web.HTTPBadRequest(text=str(e))
 
-    return web.HTTPFound(location=redirect_url)
+    response = web.Response(status=302)
+    response.headers["Location"] = redirect_url
+    return response
 
 
 class IDTokenResponseReq(BaseModel):
-    id_token: constr(min_length=1, strip_whitespace=True)
-    state: Optional[constr(min_length=1, strip_whitespace=True)]
+    id_token: Optional[constr(min_length=1, strip_whitespace=True)] = None
+    vp_token: Optional[constr(min_length=1, strip_whitespace=True)] = None
+    presentation_submission: Optional[
+        constr(min_length=1, strip_whitespace=True)
+    ] = None
+    state: Optional[constr(min_length=1, strip_whitespace=True)] = None
 
 
 @routes.post(
@@ -311,9 +323,14 @@ async def handle_post_direct_post(request: Request, context: RequestContext):
         redirect_url = await context.legal_entity_service.prepare_redirect_url_with_authorisation_code_and_state(
             id_token_response=id_token_response_req.id_token,
             state=id_token_response_req.state,
+            vp_token_response=id_token_response_req.vp_token,
+            presentation_submission=id_token_response_req.presentation_submission,
         )
 
-        return web.HTTPFound(location=redirect_url)
+        response = web.Response(status=302)
+        response.headers["Location"] = redirect_url
+        return response
+
     except InvalidStateInIDTokenResponseError as e:
         raise web.HTTPBadRequest(text=str(e))
     except ValidationError as e:
@@ -654,7 +671,10 @@ async def handle_get_initiate_credential_offer(
                 credential_offer_id=credential_offer_id
             )
         )
-        return web.HTTPFound(openid_credential_offer_uri)
+        response = web.Response(status=302)
+        response.headers["Location"] = openid_credential_offer_uri
+        return response
+
     except CredentialOfferNotFoundError as e:
         raise web.HTTPBadRequest(text=str(e))
 
