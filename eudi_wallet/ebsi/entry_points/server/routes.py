@@ -75,7 +75,7 @@ async def handle_get_issuer_jwks(request: Request, context: RequestContext):
     return await handle_get_jwks(request, context)
 
 
-@routes.get("/auth/jwks", name="handle_get_auth_jwks")
+@routes.get("/jwks", name="handle_get_auth_jwks")
 @inject_request_context()
 async def handle_get_auth_jwks(request: Request, context: RequestContext):
     return await handle_get_jwks(request, context)
@@ -233,7 +233,7 @@ async def handle_get_well_known_openid_credential_issuer_configuration(
 
 
 @routes.get(
-    "/auth/.well-known/openid-configuration",
+    "/.well-known/openid-configuration",
     name="handle_get_well_known_openid_configuration",
 )
 @inject_request_context(raise_exception_if_legal_entity_not_found=False)
@@ -245,7 +245,7 @@ async def handle_get_well_known_openid_configuration(
 
 
 @routes.get(
-    "/auth/authorize",
+    "/authorize",
     name="handle_get_authorize",
 )
 @inject_request_context()
@@ -299,7 +299,7 @@ class IDTokenResponseReq(BaseModel):
 
 
 @routes.post(
-    "/auth/direct_post",
+    "/direct_post",
     name="handle_post_direct_post",
 )
 @inject_request_context()
@@ -338,7 +338,7 @@ class TokenReq(BaseModel):
 
 
 @routes.post(
-    "/auth/token",
+    "/token",
     name="handle_post_token",
 )
 @inject_request_context()

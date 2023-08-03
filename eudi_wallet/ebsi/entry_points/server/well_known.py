@@ -212,11 +212,11 @@ def get_well_known_openid_credential_issuer_config(wallet_domain: str):
 
 def get_well_known_authn_openid_config(wallet_domain: str):
     return {
-        "redirect_uris": [f"{wallet_domain}/auth/direct_post"],
+        "redirect_uris": [f"{wallet_domain}/direct_post"],
         "issuer": f"{wallet_domain}/auth",
-        "authorization_endpoint": f"{wallet_domain}/auth/authorize",
-        "token_endpoint": f"{wallet_domain}/auth/token",
-        "jwks_uri": f"{wallet_domain}/auth/jwks",
+        "authorization_endpoint": f"{wallet_domain}/authorize",
+        "token_endpoint": f"{wallet_domain}/token",
+        "jwks_uri": f"{wallet_domain}/jwks",
         "scopes_supported": ["openid"],
         "response_types_supported": ["vp_token", "id_token"],
         "response_modes_supported": ["query"],
