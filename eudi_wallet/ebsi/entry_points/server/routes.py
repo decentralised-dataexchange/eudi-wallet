@@ -69,7 +69,7 @@ async def handle_get_jwks(request: Request, context: RequestContext):
     return web.json_response(dataclasses.asdict(resp))
 
 
-@routes.get("/issuer/jwks", name="handle_get_issuer_jwks")
+@routes.get("/jwks", name="handle_get_issuer_jwks")
 @inject_request_context()
 async def handle_get_issuer_jwks(request: Request, context: RequestContext):
     return await handle_get_jwks(request, context)
@@ -81,7 +81,7 @@ async def handle_get_auth_jwks(request: Request, context: RequestContext):
     return await handle_get_jwks(request, context)
 
 
-@routes.get("/issuer/onboard", name="handle_get_trigger_trusted_issuer_flow")
+@routes.get("/onboard", name="handle_get_trigger_trusted_issuer_flow")
 @inject_request_context(raise_exception_if_legal_entity_not_found=False)
 async def handle_get_trigger_trusted_issuer_flow(
     request: Request, context: RequestContext
@@ -148,7 +148,7 @@ class IssueCredentialReq(BaseModel):
     proof: IssueCredentialReqProof
 
 
-@routes.post("/issuer/credential", name="handle_post_credential_request")
+@routes.post("/credential", name="handle_post_credential_request")
 @inject_request_context()
 async def handle_post_credential_request(request: Request, context: RequestContext):
     authn_header = request.headers.get("Authorization")
@@ -175,7 +175,7 @@ async def handle_post_credential_request(request: Request, context: RequestConte
 
 
 @routes.post(
-    "/issuer/credential_deferred", name="handle_post_credential_deferred_request"
+    "/credential_deferred", name="handle_post_credential_deferred_request"
 )
 @inject_request_context()
 async def handle_post_credential_deferred_request(
@@ -206,7 +206,7 @@ async def handle_post_credential_deferred_request(
 
 
 @routes.get(
-    "/issuer/credentials/status/{status_list_index}",
+    "/credentials/status/{status_list_index}",
     name="handle_get_credential_status",
 )
 @inject_request_context()
@@ -220,7 +220,7 @@ async def handle_get_credential_status(request: Request, context: RequestContext
 
 
 @routes.get(
-    "/issuer/.well-known/openid-credential-issuer",
+    "/.well-known/openid-credential-issuer",
     name="handle_get_well_known_openid_credential_issuer_configuration",
 )
 @inject_request_context(raise_exception_if_legal_entity_not_found=False)
@@ -383,7 +383,7 @@ class CredentialSchemaReq(BaseModel):
     data_attributes: List[DataAttributeReq]
 
 
-@routes.post("/issuer/credential-schema", name="handle_post_create_credential_schema")
+@routes.post("/credential-schema", name="handle_post_create_credential_schema")
 @inject_request_context()
 async def handle_post_create_credential_schema(
     request: Request, context: RequestContext
@@ -405,7 +405,7 @@ async def handle_post_create_credential_schema(
         raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
 
 
-@routes.get("/issuer/credential-schemas", name="handle_get_get_all_credential_schema")
+@routes.get("/credential-schemas", name="handle_get_get_all_credential_schema")
 @inject_request_context()
 async def handle_get_get_all_credential_schema(
     request: Request, context: RequestContext
@@ -418,7 +418,7 @@ async def handle_get_get_all_credential_schema(
 
 
 @routes.delete(
-    "/issuer/credential-schema/{credential_schema_id}",
+    "/credential-schema/{credential_schema_id}",
     name="handle_delete_credential_schema_by_id",
 )
 @inject_request_context()
@@ -449,7 +449,7 @@ class CreateCredentialOfferReq(BaseModel):
 
 
 @routes.post(
-    "/issuer/credential-schema/{credential_schema_id}/credential-offer",
+    "/credential-schema/{credential_schema_id}/credential-offer",
     name="handle_post_create_credential_offer",
 )
 @inject_request_context()
@@ -491,7 +491,7 @@ class UpdateCredentialOfferReq(BaseModel):
 
 
 @routes.patch(
-    "/issuer/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}",
+    "/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}",
     name="handle_patch_update_credential_offer",
 )
 @inject_request_context()
@@ -521,7 +521,7 @@ async def handle_patch_update_credential_offer(
 
 
 @routes.post(
-    "/issuer/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}/revoke",
+    "/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}/revoke",
     name="handle_post_revoke_credential_offer",
 )
 @inject_request_context()
@@ -546,7 +546,7 @@ async def handle_post_revoke_credential_offer(
 
 
 @routes.post(
-    "/issuer/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}/unrevoke",
+    "/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}/unrevoke",
     name="handle_post_unrevoke_credential_offer",
 )
 @inject_request_context()
@@ -571,7 +571,7 @@ async def handle_post_unrevoke_credential_offer(
 
 
 @routes.delete(
-    "/issuer/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}",
+    "/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}",
     name="handle_delete_credential_offer",
 )
 @inject_request_context()
@@ -596,7 +596,7 @@ async def handle_delete_credential_offer(request: Request, context: RequestConte
 
 
 @routes.get(
-    "/issuer/credential-schema/{credential_schema_id}/credential-offers",
+    "/credential-schema/{credential_schema_id}/credential-offers",
     name="handle_get_all_credential_offers_by_credential_schema_id",
 )
 @inject_request_context()
@@ -617,7 +617,7 @@ async def handle_get_all_credential_offers_by_credential_schema_id(
 
 
 @routes.get(
-    "/issuer/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}",
+    "/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}",
     name="handle_get_get_credential_offer_by_id_and_credential_schema_id",
 )
 @inject_request_context()
@@ -639,7 +639,7 @@ async def handle_get_get_credential_offer_by_id_and_credential_schema_id(
 
 
 @routes.get(
-    "/issuer/credential-offer/{credential_offer_id}/initiate",
+    "/credential-offer/{credential_offer_id}/initiate",
     name="handle_get_initiate_credential_offer",
 )
 @inject_request_context()
@@ -660,7 +660,7 @@ async def handle_get_initiate_credential_offer(
 
 
 @routes.get(
-    "/issuer/credential-offer/{credential_offer_id}",
+    "/credential-offer/{credential_offer_id}",
     name="handle_get_get_credential_offer_by_reference",
 )
 @inject_request_context()
@@ -680,7 +680,7 @@ async def handle_get_get_credential_offer_by_reference(
 
 
 @routes.get(
-    "/issuer/request-uri/{credential_offer_id}",
+    "/request-uri/{credential_offer_id}",
     name="handle_get_get_id_token_request_by_uri",
 )
 @inject_request_context()

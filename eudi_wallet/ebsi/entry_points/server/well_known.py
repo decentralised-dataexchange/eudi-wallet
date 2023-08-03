@@ -6,8 +6,8 @@ def get_well_known_openid_credential_issuer_config(wallet_domain: str):
     return {
         "credential_issuer": f"{wallet_domain}/issuer",
         "authorization_server": f"{wallet_domain}/auth",
-        "credential_endpoint": f"{wallet_domain}/issuer/credential",
-        "deferred_credential_endpoint": f"{wallet_domain}/issuer/credential_deferred",
+        "credential_endpoint": f"{wallet_domain}/credential",
+        "deferred_credential_endpoint": f"{wallet_domain}/credential_deferred",
         "display": {
             "name": "iGrant.io - EBSI Wallet",
             "locale": "en-GB",
