@@ -7,12 +7,16 @@ import typing
 from jwcrypto import jwk, jwt
 
 from eudi_wallet.ebsi.exceptions.domain.issuer import (
-    CredentialRequestError, ExpiredPreAuthorisedCodeTokenError,
-    InvalidIssuerStateTokenError)
+    CredentialRequestError,
+    ExpiredPreAuthorisedCodeTokenError,
+    InvalidIssuerStateTokenError,
+)
 from eudi_wallet.ebsi.services.domain.utils.jwt import get_alg_for_key
 from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.value_objects.domain.issuer import (
-    CredentialResponse, SendCredentialRequest)
+    CredentialResponse,
+    SendCredentialRequest,
+)
 
 
 class IssuerService:

@@ -7,10 +7,10 @@ from aiokafka import AIOKafkaConsumer
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from eudi_wallet.ebsi.event_handlers.application.legal_entity import \
-    handle_event_onboard_trusted_issuer
-from eudi_wallet.ebsi.events.application.legal_entity import \
-    OnboardTrustedIssuerEvent
+from eudi_wallet.ebsi.event_handlers.application.legal_entity import (
+    handle_event_onboard_trusted_issuer,
+)
+from eudi_wallet.ebsi.events.application.legal_entity import OnboardTrustedIssuerEvent
 from eudi_wallet.ebsi.events.event_types import EventTypes
 from eudi_wallet.ebsi.events.wrapper import EventWrapper
 

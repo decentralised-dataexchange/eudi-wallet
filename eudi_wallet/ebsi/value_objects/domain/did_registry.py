@@ -19,26 +19,26 @@ class InsertDIDDocumentParams(DataClassJsonMixin):
 @dataclass
 class InsertDIDDocumentLedgerResult(DataClassJsonMixin):
     _from: str = field(metadata=config(field_name="from"))
-    to: str | None = None
-    data: str | None = None
-    value: str | None = None
-    nonce: str | None = None
-    chainId: str | None = None
-    gasLimit: str | None = None
-    gasPrice: str | None = None
+    to: typing.Optional[str] = None
+    data: typing.Optional[str] = None
+    value: typing.Optional[str] = None
+    nonce: typing.Optional[str] = None
+    chainId: typing.Optional[str] = None
+    gasLimit: typing.Optional[str] = None
+    gasPrice: typing.Optional[str] = None
 
 
 @dataclass
 class InsertDIDDocumentJSONRPC20ResponseBody(DataClassJsonMixin):
-    result: InsertDIDDocumentLedgerResult | None = None
+    result: typing.Optional[InsertDIDDocumentLedgerResult] = None
     jsonrpc: str = "2.0"
-    id: str | None = None
+    id: typing.Optional[str] = None
 
 
 @dataclass
 class InsertDIDDocumentJSONRPC20RequestBody(DataClassJsonMixin):
-    params: typing.List[InsertDIDDocumentParams] | None = None
-    id: str | None = None
+    params: typing.Optional[typing.List[InsertDIDDocumentParams]] = None
+    id: typing.Optional[str] = None
     jsonrpc: str = "2.0"
     method: str = "insertDidDocument"
 
@@ -67,8 +67,8 @@ class AddVerificationMethodParams(DataClassJsonMixin):
 
 @dataclass
 class AddVerificationMethodJSONRPC20RequestBody(DataClassJsonMixin):
-    params: typing.List[AddVerificationMethodParams] | None = None
-    id: str | None = None
+    params: typing.Optional[typing.List[AddVerificationMethodParams]] = None
+    id: typing.Optional[str] = None
     jsonrpc: str = "2.0"
     method: str = "addVerificationMethod"
 
@@ -85,8 +85,8 @@ class AddVerificationRelationshipParams(DataClassJsonMixin):
 
 @dataclass
 class AddVerificationRelationshipJSONRPC20RequestBody(DataClassJsonMixin):
-    params: typing.List[AddVerificationRelationshipParams] | None = None
-    id: str | None = None
+    params: typing.Optional[typing.List[AddVerificationRelationshipParams]] = None
+    id: typing.Optional[str] = None
     jsonrpc: str = "2.0"
     method: str = "addVerificationRelationship"
 

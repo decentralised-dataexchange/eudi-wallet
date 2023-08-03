@@ -4,19 +4,20 @@ from typing import Optional
 
 from aiohttp import web
 
-from eudi_wallet.ebsi.entry_points.server.constants import WALLET_DOMAIN
-from eudi_wallet.ebsi.entry_points.server.utils import (AppContext,
-                                                        get_app_context)
-from eudi_wallet.ebsi.repositories.application.credential_offer import \
-    SqlAlchemyCredentialOfferRepository
-from eudi_wallet.ebsi.repositories.application.credential_revocation_status_list import \
-    SqlAlchemyCredentialRevocationStatusListRepository
-from eudi_wallet.ebsi.repositories.application.credential_schema import \
-    SqlAlchemyCredentialSchemaRepository
-from eudi_wallet.ebsi.repositories.application.legal_entity import \
-    SqlAlchemyLegalRepository
-from eudi_wallet.ebsi.services.application.legal_entity import \
-    LegalEntityService
+from eudi_wallet.ebsi.entry_points.server.utils import AppContext, get_app_context
+from eudi_wallet.ebsi.repositories.application.credential_offer import (
+    SqlAlchemyCredentialOfferRepository,
+)
+from eudi_wallet.ebsi.repositories.application.credential_revocation_status_list import (
+    SqlAlchemyCredentialRevocationStatusListRepository,
+)
+from eudi_wallet.ebsi.repositories.application.credential_schema import (
+    SqlAlchemyCredentialSchemaRepository,
+)
+from eudi_wallet.ebsi.repositories.application.legal_entity import (
+    SqlAlchemyLegalRepository,
+)
+from eudi_wallet.ebsi.services.application.legal_entity import LegalEntityService
 
 
 async def get_legal_entity_service(app_context: AppContext) -> LegalEntityService:
@@ -38,8 +39,8 @@ async def get_legal_entity_service(app_context: AppContext) -> LegalEntityServic
         credential_issuer_configuration=app_context.credential_issuer_configuration,
         auth_server_configuration=app_context.auth_server_configuration,
         logger=app_context.logger,
-        issuer_domain=f"{WALLET_DOMAIN}",
-        auth_domain=f"{WALLET_DOMAIN}",
+        issuer_domain=app_context.domain,
+        auth_domain=app_context.domain,
         legal_entity_repository=legal_entity_repository,
         credential_schema_repository=credential_schema_repository,
         credential_offer_repository=credential_offer_repository,

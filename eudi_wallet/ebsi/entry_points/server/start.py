@@ -11,9 +11,10 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from eudi_wallet.ebsi.entities.base import Base
-from eudi_wallet.ebsi.entry_points.server.constants import WALLET_SUBDOMAIN
 from eudi_wallet.ebsi.entry_points.server.middlewares import (
-    error_middleware, logging_middleware)
+    error_middleware,
+    logging_middleware,
+)
 from eudi_wallet.ebsi.entry_points.server.routes import routes
 from eudi_wallet.ebsi.entry_points.server.startup import app_startup
 
@@ -61,11 +62,13 @@ async def handle_404(request: Request):
 
 
 class ServerSetup:
-    def __init__(self, db_session, producer, logger, kafka_topic):
+    def __init__(self, db_session, producer, logger, kafka_topic, subdomain):
         self.db_session = db_session
         self.producer = producer
         self.logger = logger
         self.kafka_topic = kafka_topic
+        self.subdomain = subdomain
+        self.domain = f"https://{self.subdomain}.ngrok.io"
 
     async def start_server(self, port: int):
         app = web.Application(middlewares=[error_middleware, logging_middleware])
@@ -74,6 +77,7 @@ class ServerSetup:
         app["kafka_topic"] = self.kafka_topic
         app["logger"] = self.logger
         app["db_session"] = self.db_session
+        app["domain"] = self.domain
 
         # Add startup functions
         app.on_startup.append(app_startup)
@@ -85,7 +89,7 @@ class ServerSetup:
         runner = web.AppRunner(app)
         await runner.setup()
 
-        site = web.TCPSite(runner, "localhost", port)
+        site = web.TCPSite(runner, "0.0.0.0", port)
         await site.start()
 
         return runner, site
@@ -98,31 +102,59 @@ class ServerTeardown:
 
 
 @click.command()
-@click.option("--port", default=8080)
-@click.option("--auth-token", envvar="NGROK_AUTH_TOKEN", prompt=True)
-@click.option("--kafka-broker-address", envvar="KAFKA_BROKER_ADDRESS", prompt=True)
-@click.option("--kafka-topic", envvar="KAFKA_TOPIC", prompt=True)
-def main(port, auth_token, kafka_broker_address, kafka_topic):
-    logger = AppLogger(__name__).logger
+@click.option("--port", envvar="PORT", default=8080)
+@click.option("--ngrok-auth-token", envvar="NGROK_AUTH_TOKEN", default=None)
+@click.option("--ngrok-subdomain", envvar="NGROK_SUBDOMAIN", default="ebsi-wallet")
+@click.option("--kafka-broker-address", envvar="KAFKA_BROKER_ADDRESS", default=None)
+@click.option("--kafka-topic", envvar="KAFKA_TOPIC", default=None)
+@click.option(
+    "--log-level",
+    default="DEBUG",
+    type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]),
+    help="Set the log level",
+)
+def main(
+    port,
+    ngrok_auth_token,
+    ngrok_subdomain,
+    kafka_broker_address,
+    kafka_topic,
+    log_level,
+):
+    level = getattr(logging, log_level.upper(), None)
+    logger = AppLogger(__name__, level=level).logger
     db_session = DBSetup("sqlite:///wallet.db").setup_db()
 
     loop = asyncio.get_event_loop()
 
     producer = None
     try:
-        producer = AIOKafkaProducer(bootstrap_servers=kafka_broker_address, loop=loop)
-        loop.run_until_complete(producer.start())
+        if kafka_broker_address:
+            producer = AIOKafkaProducer(
+                bootstrap_servers=kafka_broker_address, loop=loop
+            )
+            loop.run_until_complete(producer.start())
     except KafkaConnectionError as e:
         logger.error(f"Unable to connect to Kafka broker: {e}")
 
-    server = ServerSetup(db_session, producer, logger, kafka_topic)
-    ngrok_tunnel = NgrokSetup(auth_token)
+    server = ServerSetup(db_session, producer, logger, kafka_topic, ngrok_subdomain)
 
     runner, site = loop.run_until_complete(server.start_server(port))
 
+    # Only set up ngrok if auth token is provided
+    ngrok_tunnel = None
+    if ngrok_auth_token:
+        ngrok_tunnel = NgrokSetup(ngrok_auth_token)
+        try:
+            tunnel = ngrok_tunnel.configure_ngrok(port, ngrok_subdomain)
+            logger.info(f"ngrok tunnel URL: {tunnel.public_url}")
+
+        except Exception as e:
+            logger.error(f"Error while setting up ngrok: {e}")
+    else:
+        logger.info("Starting without ngrok...")
+
     try:
-        tunnel = ngrok_tunnel.configure_ngrok(port, WALLET_SUBDOMAIN)
-        logger.info(f"ngrok tunnel URL: {tunnel.public_url}")
         loop.run_forever()
 
     except KeyboardInterrupt:
@@ -133,7 +165,7 @@ def main(port, auth_token, kafka_broker_address, kafka_topic):
         loop.run_until_complete(producer.stop())
         loop.close()
 
-        if "tunnel" in locals():
+        if ngrok_tunnel and "tunnel" in locals():
             ngrok.disconnect(tunnel.public_url)
             ngrok.kill()
 

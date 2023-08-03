@@ -1,19 +1,25 @@
 import logging
+from typing import Optional
 
 from eudi_wallet.ebsi.exceptions.domain.trusted_issuer_registry import (
-    AddIssuerProxyError, SetAttributeDataError)
+    AddIssuerProxyError,
+    SetAttributeDataError,
+)
 from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.value_objects.domain.trusted_issuer_registry import (
-    AddIssuerProxyJSONRPC20RequestBody, InsertIssuerJSONRPC20RequestBody,
-    JSONRPC20ResponseBody, SetAttributeDataJSONRPC20RequestBody)
+    AddIssuerProxyJSONRPC20RequestBody,
+    InsertIssuerJSONRPC20RequestBody,
+    JSONRPC20ResponseBody,
+    SetAttributeDataJSONRPC20RequestBody,
+)
 
 
 class TIRService:
     def __init__(
         self,
-        trusted_issuer_registry_rpc_endpoint: str | None = None,
-        access_token: str | None = None,
-        logger: logging.Logger | None = None,
+        trusted_issuer_registry_rpc_endpoint: Optional[str] = None,
+        access_token: Optional[str] = None,
+        logger: Optional[logging.Logger] = None,
     ) -> None:
         self.trusted_issuer_registry_rpc_endpoint = trusted_issuer_registry_rpc_endpoint
         self.access_token = access_token

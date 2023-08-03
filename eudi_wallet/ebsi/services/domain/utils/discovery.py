@@ -2,7 +2,9 @@ import typing
 
 from eudi_wallet.ebsi.services.domain.discovery import DiscoveryService
 from eudi_wallet.ebsi.value_objects.domain.discovery import (
-    OpenIDAuthServerConfig, OpenIDCredentialIssuerConfig)
+    OpenIDAuthServerConfig,
+    OpenIDCredentialIssuerConfig,
+)
 
 
 async def discover_credential_issuer_and_authn_server() -> typing.Tuple[

@@ -27,23 +27,23 @@ class SendSignedTransactionParams(DataClassJsonMixin):
 
 @dataclass
 class SendSignedTransactionJSONRPC20RequestBody(DataClassJsonMixin):
-    params: typing.List[SendSignedTransactionParams] | None = None
-    id: str | None = None
+    params: typing.Optional[typing.List[SendSignedTransactionParams]] = None
+    id: typing.Optional[str] = None
     jsonrpc: str = "2.0"
     method: str = "insertDidDocument"
 
 
 @dataclass
 class SendSignedTransactionJSONRPC20ResponseBody(DataClassJsonMixin):
-    result: str | None = None
+    result: typing.Optional[str] = None
     jsonrpc: str = "2.0"
-    id: str | None = None
+    id: typing.Optional[str] = None
 
 
 @dataclass
 class GetTransactionReceiptJSONRPC20RequestBody(DataClassJsonMixin):
-    params: typing.List[str] | None = None
-    id: str | None = None
+    params: typing.Optional[typing.List[str]] = None
+    id: typing.Optional[str] = None
     jsonrpc: str = "2.0"
     method: str = "eth_getTransactionReceipt"
 

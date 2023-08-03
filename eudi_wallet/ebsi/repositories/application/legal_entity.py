@@ -5,8 +5,7 @@ from typing import Union
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
-from eudi_wallet.ebsi.entities.application.legal_entity import \
-    LegalEntityEntity
+from eudi_wallet.ebsi.entities.application.legal_entity import LegalEntityEntity
 
 
 class SqlAlchemyLegalRepository:

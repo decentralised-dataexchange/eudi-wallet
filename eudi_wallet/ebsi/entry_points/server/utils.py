@@ -6,7 +6,9 @@ from aiokafka import AIOKafkaProducer
 from sqlalchemy.orm import Session
 
 from eudi_wallet.ebsi.value_objects.domain.discovery import (
-    OpenIDAuthServerConfig, OpenIDCredentialIssuerConfig)
+    OpenIDAuthServerConfig,
+    OpenIDCredentialIssuerConfig,
+)
 
 
 @dataclasses.dataclass
@@ -19,6 +21,7 @@ class AppContext:
     kafka_producer: typing.Optional[AIOKafkaProducer] = None
     kafka_topic: typing.Optional[str] = None
     db_session: typing.Optional[Session] = None
+    domain: str = None
 
 
 def get_app_context(app) -> AppContext:
@@ -29,6 +32,7 @@ def get_app_context(app) -> AppContext:
         kafka_producer=app["kafka_producer"],
         kafka_topic=app["kafka_topic"],
         db_session=app["db_session"],
+        domain=app["domain"],
     )
 
 

@@ -1,8 +1,11 @@
 import logging
+from typing import Optional
 
 from eudi_wallet.ebsi.exceptions.domain.did_registry import (
-    AddVerificationMethodError, AddVerificationRelationshipError,
-    InsertDIDDocumentError)
+    AddVerificationMethodError,
+    AddVerificationRelationshipError,
+    InsertDIDDocumentError,
+)
 from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.value_objects.domain.did_registry import (
     AddVerificationMethodJSONRPC20RequestBody,
@@ -10,16 +13,17 @@ from eudi_wallet.ebsi.value_objects.domain.did_registry import (
     AddVerificationRelationshipJSONRPC20RequestBody,
     AddVerificationRelationshipJSONRPC20ResponseBody,
     InsertDIDDocumentJSONRPC20RequestBody,
-    InsertDIDDocumentJSONRPC20ResponseBody)
+    InsertDIDDocumentJSONRPC20ResponseBody,
+)
 
 
 class DIDRegistryService:
     def __init__(
         self,
-        did_registry_rpc_endpoint: str | None = None,
-        besu_rpc_endpoint: str | None = None,
-        access_token: str | None = None,
-        logger: logging.Logger | None = None,
+        did_registry_rpc_endpoint: Optional[str] = None,
+        besu_rpc_endpoint: Optional[str] = None,
+        access_token: Optional[str] = None,
+        logger: Optional[logging.Logger] = None,
     ) -> None:
         self.did_registry_rpc_endpoint = did_registry_rpc_endpoint
         self.besu_rpc_endpoint = besu_rpc_endpoint

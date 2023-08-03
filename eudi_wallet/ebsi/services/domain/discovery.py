@@ -1,13 +1,17 @@
+from typing import Optional
+
 from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.value_objects.domain.discovery import (
-    OpenIDAuthServerConfig, OpenIDCredentialIssuerConfig)
+    OpenIDAuthServerConfig,
+    OpenIDCredentialIssuerConfig,
+)
 
 
 class DiscoveryService:
     def __init__(
         self,
-        issuer_config_endpoint: str | None = None,
-        authn_config_endpoint: str | None = None,
+        issuer_config_endpoint: Optional[str] = None,
+        authn_config_endpoint: Optional[str] = None,
     ) -> None:
         self.issuer_config_endpoint = issuer_config_endpoint
         self.authn_config_endpoint = authn_config_endpoint

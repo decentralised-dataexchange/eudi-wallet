@@ -6,18 +6,31 @@ from jwcrypto import jwk, jwt  # type: ignore
 from jwcrypto.common import json_decode
 
 from eudi_wallet.ebsi.exceptions.domain.authn import (
-    AuthorizationCodeRedirectError, InvalidAccessTokenError,
-    InvalidResponseStatusError, SendIDTokenResponseError)
-from eudi_wallet.ebsi.services.domain.authn_request_builder import \
-    AuthorizationRequestBuilder
+    AuthorizationCodeRedirectError,
+    InvalidAccessTokenError,
+    InvalidResponseStatusError,
+    SendIDTokenResponseError,
+)
+from eudi_wallet.ebsi.services.domain.authn_request_builder import (
+    AuthorizationRequestBuilder,
+)
 from eudi_wallet.ebsi.services.domain.utils.jwt import get_alg_for_key
 from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
 from eudi_wallet.ebsi.value_objects.domain.authn import (
-    AuthorizationCodeRedirectResponse, ClientAssertionJWTToken,
-    CreateIDTokenResponse, DescriptorMap, DescriptorMapPath, IDTokenRequest,
-    IDTokenRequestJWT, IDTokenResponseJWTToken, PresentationDefinition,
-    PresentationSubmission, TokenResponse, VpJwtTokenPayloadModel)
+    AuthorizationCodeRedirectResponse,
+    ClientAssertionJWTToken,
+    CreateIDTokenResponse,
+    DescriptorMap,
+    DescriptorMapPath,
+    IDTokenRequest,
+    IDTokenRequestJWT,
+    IDTokenResponseJWTToken,
+    PresentationDefinition,
+    PresentationSubmission,
+    TokenResponse,
+    VpJwtTokenPayloadModel,
+)
 from eudi_wallet.util import parse_query_string_parameters_from_url
 
 

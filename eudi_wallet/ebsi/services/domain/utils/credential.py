@@ -8,12 +8,13 @@ from dataclasses import dataclass
 from bitarray import bitarray
 from jwcrypto import jwk, jwt
 
-from eudi_wallet.ebsi.exceptions.domain.issuer import \
-    CredentialDeserializationError
+from eudi_wallet.ebsi.exceptions.domain.issuer import CredentialDeserializationError
 from eudi_wallet.ebsi.services.domain.utils.jwt import get_alg_for_key
 from eudi_wallet.ebsi.value_objects.domain.issuer import (
-    CredentialTypes, VerifiableAccreditationToAttest,
-    VerifiableAuthorisationToOnboard)
+    CredentialTypes,
+    VerifiableAccreditationToAttest,
+    VerifiableAuthorisationToOnboard,
+)
 
 
 def deserialize_credential_jwt(

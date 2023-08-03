@@ -122,8 +122,8 @@ class SendIDTokenResponse(DataClassJsonMixin):
 
 @dataclass
 class AuthorizationCodeRedirectResponse(DataClassJsonMixin):
-    redirect_uri: str | None = None
-    code: str | None = None
+    redirect_uri: Optional[str] = None
+    code: Optional[str] = None
 
 
 @dataclass

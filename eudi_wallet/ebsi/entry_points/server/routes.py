@@ -9,34 +9,44 @@ from aiohttp.web_request import Request
 from pydantic import BaseModel, Field, ValidationError, constr
 
 from eudi_wallet.ebsi.entry_points.kafka.producer import produce
-from eudi_wallet.ebsi.entry_points.server.constants import WALLET_DOMAIN
 from eudi_wallet.ebsi.entry_points.server.decorators import (
-    RequestContext, inject_request_context)
+    RequestContext,
+    inject_request_context,
+)
 from eudi_wallet.ebsi.entry_points.server.well_known import (
     get_well_known_authn_openid_config,
-    get_well_known_openid_credential_issuer_config)
-from eudi_wallet.ebsi.events.application.legal_entity import \
-    OnboardTrustedIssuerEvent
+    get_well_known_openid_credential_issuer_config,
+)
+from eudi_wallet.ebsi.events.application.legal_entity import OnboardTrustedIssuerEvent
 from eudi_wallet.ebsi.events.event_types import EventTypes
 from eudi_wallet.ebsi.events.wrapper import EventWrapper
 from eudi_wallet.ebsi.exceptions.application.legal_entity import (
-    ClientIdRequiredError, CreateAccessTokenError, CreateCredentialOfferError,
-    CredentialOfferIsPreAuthorizedError, CredentialOfferNotFoundError,
-    InvalidStateInIDTokenResponseError, UpdateCredentialOfferError,
+    ClientIdRequiredError,
+    CreateAccessTokenError,
+    CreateCredentialOfferError,
+    CredentialOfferIsPreAuthorizedError,
+    CredentialOfferNotFoundError,
+    InvalidStateInIDTokenResponseError,
+    UpdateCredentialOfferError,
     UserPinRequiredError,
-    ValidateDataAttributeValuesAgainstDataAttributesError)
+    ValidateDataAttributeValuesAgainstDataAttributesError,
+)
 from eudi_wallet.ebsi.exceptions.domain.authn import (
-    InvalidAcceptanceTokenError, InvalidAccessTokenError)
+    InvalidAcceptanceTokenError,
+    InvalidAccessTokenError,
+)
 from eudi_wallet.ebsi.exceptions.domain.issuer import (
-    CredentialOfferRevocationError, CredentialPendingError)
+    CredentialOfferRevocationError,
+    CredentialPendingError,
+)
 from eudi_wallet.ebsi.services.domain.utils.did import generate_and_store_did
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
-from eudi_wallet.ebsi.value_objects.application.legal_entity import \
-    LegalEntityRoles
+from eudi_wallet.ebsi.value_objects.application.legal_entity import LegalEntityRoles
 from eudi_wallet.ebsi.value_objects.domain.authn import (
-    AuthorisationGrants, AuthorizationRequestQueryParams)
-from eudi_wallet.ebsi.value_objects.domain.issuer import \
-    CredentialIssuanceModes
+    AuthorisationGrants,
+    AuthorizationRequestQueryParams,
+)
+from eudi_wallet.ebsi.value_objects.domain.issuer import CredentialIssuanceModes
 
 routes = web.RouteTableDef()
 
@@ -115,7 +125,7 @@ async def handle_get_trigger_trusted_issuer_flow(
                 )
             )
         event = OnboardTrustedIssuerEvent(
-            issuer_domain=f"{WALLET_DOMAIN}/issuer",
+            issuer_domain=context.app_context.domain,
             crypto_seed=legal_entity_entity.cryptographic_seed,
             openid_credential_issuer_config=context.app_context.credential_issuer_configuration,
             auth_server_config=context.app_context.auth_server_configuration,
@@ -226,7 +236,7 @@ async def handle_get_well_known_openid_credential_issuer_configuration(
     request: Request,
     context: RequestContext,
 ):
-    res = get_well_known_openid_credential_issuer_config(WALLET_DOMAIN)
+    res = get_well_known_openid_credential_issuer_config(context.app_context.domain)
     return web.json_response(res)
 
 
@@ -238,7 +248,7 @@ async def handle_get_well_known_openid_credential_issuer_configuration(
 async def handle_get_well_known_openid_configuration(
     request: Request, context: RequestContext
 ):
-    res = get_well_known_authn_openid_config(WALLET_DOMAIN)
+    res = get_well_known_authn_openid_config(context.app_context.domain)
     return web.json_response(res)
 
 

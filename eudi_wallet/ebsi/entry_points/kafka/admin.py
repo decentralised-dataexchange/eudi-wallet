@@ -1,14 +1,16 @@
-from confluent_kafka.admin import AdminClient, NewTopic
+import asyncio
+
+from kafka.admin import KafkaAdminClient, NewTopic
 
 
-def create_topic_if_not_exists(
+async def create_topic_if_not_exists(
     broker, topic_name, num_partitions=1, replication_factor=1
 ):
-    admin_client = AdminClient({"bootstrap.servers": broker})
+    admin_client = KafkaAdminClient(bootstrap_servers=broker)
 
     # Fetch topic metadata
-    topic_metadata = admin_client.list_topics(timeout=5)
-    if topic_name in topic_metadata.topics:
+    topic_metadata = admin_client.list_topics()
+    if topic_name in set(topic_metadata):
         print(f"Topic '{topic_name}' already exists.")
         return
     else:
@@ -24,24 +26,22 @@ def create_topic_if_not_exists(
     # Define NewTopic object
     new_topic = [
         NewTopic(
-            topic_name,
+            name=topic_name,
             num_partitions=num_partitions,
             replication_factor=replication_factor,
-            config=topic_config,
+            topic_configs=topic_config,
         )
     ]
 
     # Create topic
-    fs = admin_client.create_topics(new_topic)
-
-    # Wait for each operation to finish.
-    for topic, f in fs.items():
-        try:
-            f.result()  # The result itself is None
-            print(f"Topic {topic} created")
-        except Exception as e:
-            print(f"Failed to create topic {topic}: {e}")
+    try:
+        admin_client.create_topics(new_topics=new_topic)
+        print(f"Topic {topic_name} created")
+    except Exception as e:
+        print(f"Failed to create topic {topic_name}: {e}")
 
 
 if __name__ == "__main__":
-    create_topic_if_not_exists("localhost:9092", "ebsi")
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(create_topic_if_not_exists("localhost:9092", "ebsi"))
+    loop.close()

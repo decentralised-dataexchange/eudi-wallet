@@ -1,26 +1,28 @@
 import logging
+from typing import Optional
 
 from aiohttp.web_response import Response
 from eth_account.datastructures import SignedTransaction
 from web3.auto import w3
 
-from eudi_wallet.ebsi.exceptions.domain.ledger import \
-    SendSignedTransactionError
+from eudi_wallet.ebsi.exceptions.domain.ledger import SendSignedTransactionError
 from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.value_objects.domain.ledger import (
     GetTransactionReceiptJSONRPC20RequestBody,
     SendSignedTransactionJSONRPC20RequestBody,
-    SendSignedTransactionJSONRPC20ResponseBody, ToBeSignedTransaction,
-    TransactionReceiptJSONRPC20ResponseBody)
+    SendSignedTransactionJSONRPC20ResponseBody,
+    ToBeSignedTransaction,
+    TransactionReceiptJSONRPC20ResponseBody,
+)
 
 
 class LedgerService:
     def __init__(
         self,
-        registry_rpc_endpoint: str | None = None,
-        besu_rpc_endpoint: str | None = None,
-        access_token: str | None = None,
-        logger: logging.Logger | None = None,
+        registry_rpc_endpoint: Optional[str] = None,
+        besu_rpc_endpoint: Optional[str] = None,
+        access_token: Optional[str] = None,
+        logger: Optional[logging.Logger] = None,
     ) -> None:
         self.registry_rpc_endpoint = registry_rpc_endpoint
         self.besu_rpc_endpoint = besu_rpc_endpoint

@@ -2,16 +2,18 @@ from logging import Logger
 
 from sqlalchemy.orm import Session
 
-from eudi_wallet.ebsi.events.application.legal_entity import \
-    OnboardTrustedIssuerEvent
-from eudi_wallet.ebsi.repositories.application.credential_revocation_status_list import \
-    SqlAlchemyCredentialRevocationStatusListRepository
-from eudi_wallet.ebsi.repositories.application.legal_entity import \
-    SqlAlchemyLegalRepository
-from eudi_wallet.ebsi.services.application.legal_entity import \
-    LegalEntityService
+from eudi_wallet.ebsi.events.application.legal_entity import OnboardTrustedIssuerEvent
+from eudi_wallet.ebsi.repositories.application.credential_revocation_status_list import (
+    SqlAlchemyCredentialRevocationStatusListRepository,
+)
+from eudi_wallet.ebsi.repositories.application.legal_entity import (
+    SqlAlchemyLegalRepository,
+)
+from eudi_wallet.ebsi.services.application.legal_entity import LegalEntityService
 from eudi_wallet.ebsi.value_objects.domain.discovery import (
-    OpenIDAuthServerConfig, OpenIDCredentialIssuerConfig)
+    OpenIDAuthServerConfig,
+    OpenIDCredentialIssuerConfig,
+)
 
 
 async def handle_event_onboard_trusted_issuer(

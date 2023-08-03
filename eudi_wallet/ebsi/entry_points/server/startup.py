@@ -1,5 +1,6 @@
-from eudi_wallet.ebsi.services.domain.utils.discovery import \
-    discover_credential_issuer_and_authn_server
+from eudi_wallet.ebsi.services.domain.utils.discovery import (
+    discover_credential_issuer_and_authn_server,
+)
 
 
 async def app_startup(app):

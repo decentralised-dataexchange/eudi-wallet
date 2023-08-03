@@ -16,8 +16,8 @@ class InsertIssuerParams(DataClassJsonMixin):
 
 @dataclass
 class InsertIssuerJSONRPC20RequestBody(DataClassJsonMixin):
-    params: typing.List[InsertIssuerParams] | None = None
-    id: str | None = None
+    params: typing.Optional[typing.List[InsertIssuerParams]] = None
+    id: typing.Optional[str] = None
     jsonrpc: str = "2.0"
     method: str = "insertIssuer"
 
@@ -32,8 +32,8 @@ class SetAttributeDataParams(DataClassJsonMixin):
 
 @dataclass
 class SetAttributeDataJSONRPC20RequestBody(DataClassJsonMixin):
-    params: typing.List[SetAttributeDataParams] | None = None
-    id: str | None = None
+    params: typing.Optional[typing.List[SetAttributeDataParams]] = None
+    id: typing.Optional[str] = None
     jsonrpc: str = "2.0"
     method: str = "setAttributeData"
 
@@ -47,8 +47,8 @@ class AddIssuerProxyParams(DataClassJsonMixin):
 
 @dataclass
 class AddIssuerProxyJSONRPC20RequestBody(DataClassJsonMixin):
-    params: typing.List[AddIssuerProxyParams] | None = None
-    id: str | None = None
+    params: typing.List[AddIssuerProxyParams] = None
+    id: typing.Optional[str] = None
     jsonrpc: str = "2.0"
     method: str = "addIssuerProxy"
 

@@ -8,81 +8,116 @@ from typing import List, Optional, Tuple, Union
 
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
-from jwcrypto import jwk, jwt
-from jwcrypto.common import json_decode
+from jwcrypto import jwk
 
-from eudi_wallet.ebsi.entities.application.credential_offer import \
-    CredentialOfferEntity
-from eudi_wallet.ebsi.entities.application.credential_revocation_status_list import \
-    CredentialRevocationStatusListEntity
-from eudi_wallet.ebsi.entities.application.credential_schema import \
-    CredentialSchemaEntity
-from eudi_wallet.ebsi.entities.application.legal_entity import \
-    LegalEntityEntity
+from eudi_wallet.ebsi.entities.application.credential_offer import CredentialOfferEntity
+from eudi_wallet.ebsi.entities.application.credential_revocation_status_list import (
+    CredentialRevocationStatusListEntity,
+)
+from eudi_wallet.ebsi.entities.application.credential_schema import (
+    CredentialSchemaEntity,
+)
+from eudi_wallet.ebsi.entities.application.legal_entity import LegalEntityEntity
 from eudi_wallet.ebsi.exceptions.application.legal_entity import (
-    ClientIdRequiredError, CreateAccessTokenError, CreateCredentialOfferError,
-    CredentialOfferIsPreAuthorizedError, CredentialOfferNotFoundError,
-    InvalidAuthorisationCodeError, InvalidClientError,
-    InvalidCodeVerifierError, InvalidPreAuthorisedCodeError,
-    InvalidStateInIDTokenResponseError, InvalidUserPinError,
-    StatusListNotFoundError, UpdateCredentialOfferError, UserPinRequiredError,
-    ValidateDataAttributeValuesAgainstDataAttributesError)
+    ClientIdRequiredError,
+    CreateCredentialOfferError,
+    CredentialOfferIsPreAuthorizedError,
+    CredentialOfferNotFoundError,
+    InvalidAuthorisationCodeError,
+    InvalidClientError,
+    InvalidCodeVerifierError,
+    InvalidPreAuthorisedCodeError,
+    InvalidStateInIDTokenResponseError,
+    InvalidUserPinError,
+    UpdateCredentialOfferError,
+    UserPinRequiredError,
+    ValidateDataAttributeValuesAgainstDataAttributesError,
+)
 from eudi_wallet.ebsi.exceptions.domain.authn import (
-    InvalidAcceptanceTokenError, InvalidAccessTokenError)
+    InvalidAcceptanceTokenError,
+    InvalidAccessTokenError,
+)
 from eudi_wallet.ebsi.exceptions.domain.issuer import (
-    CredentialOfferRevocationError, CredentialPendingError,
-    CredentialRevocationStatusListNotFoundError)
-from eudi_wallet.ebsi.repositories.application.credential_offer import \
-    SqlAlchemyCredentialOfferRepository
-from eudi_wallet.ebsi.repositories.application.credential_revocation_status_list import \
-    SqlAlchemyCredentialRevocationStatusListRepository
-from eudi_wallet.ebsi.repositories.application.credential_schema import \
-    SqlAlchemyCredentialSchemaRepository
-from eudi_wallet.ebsi.repositories.application.legal_entity import \
-    SqlAlchemyLegalRepository
+    CredentialOfferRevocationError,
+    CredentialPendingError,
+    CredentialRevocationStatusListNotFoundError,
+)
+from eudi_wallet.ebsi.repositories.application.credential_offer import (
+    SqlAlchemyCredentialOfferRepository,
+)
+from eudi_wallet.ebsi.repositories.application.credential_revocation_status_list import (
+    SqlAlchemyCredentialRevocationStatusListRepository,
+)
+from eudi_wallet.ebsi.repositories.application.credential_schema import (
+    SqlAlchemyCredentialSchemaRepository,
+)
+from eudi_wallet.ebsi.repositories.application.legal_entity import (
+    SqlAlchemyLegalRepository,
+)
 from eudi_wallet.ebsi.services.domain.authn import AuthnService
-from eudi_wallet.ebsi.services.domain.authn_request_builder import \
-    AuthorizationRequestBuilder
+from eudi_wallet.ebsi.services.domain.authn_request_builder import (
+    AuthorizationRequestBuilder,
+)
 from eudi_wallet.ebsi.services.domain.did_registry import DIDRegistryService
 from eudi_wallet.ebsi.services.domain.issuer import IssuerService
 from eudi_wallet.ebsi.services.domain.ledger import LedgerService
 from eudi_wallet.ebsi.services.domain.trusted_issuer_registry import TIRService
-from eudi_wallet.ebsi.services.domain.utils.authn import \
-    generate_code_challenge
+from eudi_wallet.ebsi.services.domain.utils.authn import generate_code_challenge
 from eudi_wallet.ebsi.services.domain.utils.credential import (
-    CredentialStatus, create_credential_token, deserialize_credential_jwt,
-    generate_w3c_vc_statuslist_encoded_bitstring,
-    update_w3c_vc_statuslist_encoded_bitstring)
+    CredentialStatus,
+    create_credential_token,
+    deserialize_credential_jwt,
+    update_w3c_vc_statuslist_encoded_bitstring,
+)
 from eudi_wallet.ebsi.services.domain.utils.did import generate_and_store_did
 from eudi_wallet.ebsi.utils.date_time import generate_ISO8601_UTC
 from eudi_wallet.ebsi.utils.hex import convert_string_to_hex
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
-from eudi_wallet.ebsi.value_objects.application.legal_entity import \
-    LegalEntityRoles
 from eudi_wallet.ebsi.value_objects.domain.authn import (
-    AuthorisationGrants, AuthorizationRequestQueryParams,
-    CreateIDTokenResponse, TokenResponse, VerifiablePresentation,
-    VpJwtTokenPayloadModel)
+    AuthorisationGrants,
+    CreateIDTokenResponse,
+    TokenResponse,
+    VerifiablePresentation,
+    VpJwtTokenPayloadModel,
+)
 from eudi_wallet.ebsi.value_objects.domain.did_registry import (
-    AddVerificationMethodJSONRPC20RequestBody, AddVerificationMethodParams,
+    AddVerificationMethodJSONRPC20RequestBody,
+    AddVerificationMethodParams,
     AddVerificationRelationshipJSONRPC20RequestBody,
-    AddVerificationRelationshipParams, InsertDIDDocumentJSONRPC20RequestBody,
-    InsertDIDDocumentParams)
+    AddVerificationRelationshipParams,
+    InsertDIDDocumentJSONRPC20RequestBody,
+    InsertDIDDocumentParams,
+)
 from eudi_wallet.ebsi.value_objects.domain.discovery import (
-    OpenIDAuthServerConfig, OpenIDCredentialIssuerConfig)
+    OpenIDAuthServerConfig,
+    OpenIDCredentialIssuerConfig,
+)
 from eudi_wallet.ebsi.value_objects.domain.issuer import (
-    AcceptanceTokenResponse, CredentialIssuanceModes, CredentialProof,
-    CredentialRequest, CredentialRequestPayload, CredentialResponse,
-    CredentialStatuses, CredentialTypes, SendCredentialRequest,
-    VerifiableAccreditationToAttest)
+    AcceptanceTokenResponse,
+    CredentialIssuanceModes,
+    CredentialProof,
+    CredentialRequestPayload,
+    CredentialResponse,
+    CredentialStatuses,
+    CredentialTypes,
+    SendCredentialRequest,
+    VerifiableAccreditationToAttest,
+)
 from eudi_wallet.ebsi.value_objects.domain.ledger import (
     GetTransactionReceiptJSONRPC20RequestBody,
-    SendSignedTransactionJSONRPC20RequestBody, SendSignedTransactionParams,
-    ToBeSignedTransaction)
+    SendSignedTransactionJSONRPC20RequestBody,
+    SendSignedTransactionParams,
+    ToBeSignedTransaction,
+)
 from eudi_wallet.ebsi.value_objects.domain.trusted_issuer_registry import (
-    AddIssuerProxyJSONRPC20RequestBody, AddIssuerProxyParams,
-    InsertIssuerJSONRPC20RequestBody, InsertIssuerParams, ProxyData,
-    SetAttributeDataJSONRPC20RequestBody, SetAttributeDataParams)
+    AddIssuerProxyJSONRPC20RequestBody,
+    AddIssuerProxyParams,
+    InsertIssuerJSONRPC20RequestBody,
+    InsertIssuerParams,
+    ProxyData,
+    SetAttributeDataJSONRPC20RequestBody,
+    SetAttributeDataParams,
+)
 
 
 class LegalEntityService:
@@ -872,7 +907,7 @@ class LegalEntityService:
         proxy_data = ProxyData(
             prefix=self.issuer_domain,
             headers={},
-            testSuffix="/credentials/status/1",
+            testSuffix="/credentials/status/102c7a17-d6c3-4b57-ba5e-9d94f5b3edb9",
         )
         await self.add_issuer_proxy(
             proxy_data=json.dumps(proxy_data.to_dict(), separators=(",", ":")),

@@ -5,10 +5,13 @@ from typing import Optional, Union
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
-from eudi_wallet.ebsi.entities.application.credential_revocation_status_list import \
-    CredentialRevocationStatusListEntity
+from eudi_wallet.ebsi.entities.application.credential_revocation_status_list import (
+    CredentialRevocationStatusListEntity,
+)
 from eudi_wallet.ebsi.services.domain.utils.credential import (
-    CredentialStatus, generate_w3c_vc_statuslist_encoded_bitstring)
+    CredentialStatus,
+    generate_w3c_vc_statuslist_encoded_bitstring,
+)
 
 
 class SqlAlchemyCredentialRevocationStatusListRepository:
