@@ -71,23 +71,73 @@ class CredentialStatus:
     is_revoked: bool
 
 
-def generate_w3c_vc_statuslist_encoded_bitstring(
-    credential_statuses: typing.List[CredentialStatus],
-):
+def decode_bitstring(encoded_bitstring):
+    # Calculate the number of padding characters that were removed
+    padding = "=" * ((4 - len(encoded_bitstring) % 4) % 4)
+    # Add the padding back to the encoded bitstring
+    encoded_bitstring_with_padding = encoded_bitstring + padding
+
+    # Base64-decode the compressed bitstring
+    compressed = base64.b64decode(encoded_bitstring_with_padding)
+
+    # Use gzip to decompress the bitstring
+    bitstring_bytes = gzip.decompress(compressed)
+
+    # Convert the bytes to a bitarray
+    bitstring = bitarray()
+    bitstring.frombytes(bitstring_bytes)
+
+    return bitstring
+
+
+def initialise_bitstring() -> bitarray:
     # Initialize a bitarray with 16KB of 0 bits
     bitstring = bitarray(16 * 1024 * 8)
     bitstring.setall(0)
+    return bitstring
 
+
+def revoke_credentials_create_encoded_bitstring(
+    bitstring: bitarray, credential_statuses: typing.List[CredentialStatus]
+) -> str:
     # Loop through issuedCredentials
     for credential_status in credential_statuses:
         # If the credential is revoked, set the bit at statusListIndex to 1
-        if credential_status.is_revoked:
-            bitstring[credential_status.status_list_index] = 1
+        bitstring[credential_status.status_list_index] = (
+            1 if credential_status.is_revoked else 0
+        )
 
     # Use gzip to compress the bitstring
     compressed = gzip.compress(bitstring.tobytes())
 
     # Base64-encode the compressed bitstring
-    compressed_b64 = base64.b64encode(compressed).rstrip(b"=").decode("utf-8")
+    encoded_bitstring = base64.b64encode(compressed).rstrip(b"=").decode("utf-8")
 
-    return compressed_b64
+    return encoded_bitstring
+
+
+def generate_w3c_vc_statuslist_encoded_bitstring(
+    credential_statuses: typing.List[CredentialStatus],
+):
+    # Initialize a bitarray with 16KB of 0 bits
+    bitstring = initialise_bitstring()
+
+    encoded_bitstring = revoke_credentials_create_encoded_bitstring(
+        bitstring, credential_statuses
+    )
+
+    return encoded_bitstring
+
+
+def update_w3c_vc_statuslist_encoded_bitstring(
+    encoded_bitstring: str,
+    credential_statuses: typing.List[CredentialStatus],
+):
+    # Decode the existing bitstring
+    bitstring = decode_bitstring(encoded_bitstring)
+
+    encoded_bitstring = revoke_credentials_create_encoded_bitstring(
+        bitstring, credential_statuses
+    )
+
+    return encoded_bitstring

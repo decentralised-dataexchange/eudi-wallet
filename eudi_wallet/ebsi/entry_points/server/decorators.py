@@ -9,6 +9,8 @@ from eudi_wallet.ebsi.entry_points.server.utils import (AppContext,
                                                         get_app_context)
 from eudi_wallet.ebsi.repositories.application.credential_offer import \
     SqlAlchemyCredentialOfferRepository
+from eudi_wallet.ebsi.repositories.application.credential_revocation_status_list import \
+    SqlAlchemyCredentialRevocationStatusListRepository
 from eudi_wallet.ebsi.repositories.application.credential_schema import \
     SqlAlchemyCredentialSchemaRepository
 from eudi_wallet.ebsi.repositories.application.legal_entity import \
@@ -27,6 +29,11 @@ async def get_legal_entity_service(app_context: AppContext) -> LegalEntityServic
     credential_offer_repository = SqlAlchemyCredentialOfferRepository(
         session=app_context.db_session, logger=app_context.logger
     )
+    credential_revocation_status_list_repository = (
+        SqlAlchemyCredentialRevocationStatusListRepository(
+            session=app_context.db_session, logger=app_context.logger
+        )
+    )
     legal_entity_service = LegalEntityService(
         credential_issuer_configuration=app_context.credential_issuer_configuration,
         auth_server_configuration=app_context.auth_server_configuration,
@@ -36,6 +43,7 @@ async def get_legal_entity_service(app_context: AppContext) -> LegalEntityServic
         legal_entity_repository=legal_entity_repository,
         credential_schema_repository=credential_schema_repository,
         credential_offer_repository=credential_offer_repository,
+        credential_revocation_status_list_repository=credential_revocation_status_list_repository,
     )
 
     return legal_entity_service

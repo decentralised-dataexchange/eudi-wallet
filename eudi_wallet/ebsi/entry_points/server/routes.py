@@ -27,8 +27,10 @@ from eudi_wallet.ebsi.exceptions.application.legal_entity import (
     ValidateDataAttributeValuesAgainstDataAttributesError)
 from eudi_wallet.ebsi.exceptions.domain.authn import (
     InvalidAcceptanceTokenError, InvalidAccessTokenError)
-from eudi_wallet.ebsi.exceptions.domain.issuer import CredentialPendingError
+from eudi_wallet.ebsi.exceptions.domain.issuer import (
+    CredentialOfferRevocationError, CredentialPendingError)
 from eudi_wallet.ebsi.services.domain.utils.did import generate_and_store_did
+from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
 from eudi_wallet.ebsi.value_objects.application.legal_entity import \
     LegalEntityRoles
 from eudi_wallet.ebsi.value_objects.domain.authn import (
@@ -204,18 +206,15 @@ async def handle_post_credential_deferred_request(
 
 
 @routes.get(
-    "/issuer/credentials/status/{credential_status_index}",
+    "/issuer/credentials/status/{status_list_index}",
     name="handle_get_credential_status",
 )
 @inject_request_context()
 async def handle_get_credential_status(request: Request, context: RequestContext):
-    if request.match_info.get("credential_status_index"):
-        credential_status_index = int(request.match_info.get("credential_status_index"))
-    else:
-        credential_status_index = 0
+    status_list_index = request.match_info.get("status_list_index")
 
     credential_status_dict = await context.legal_entity_service.get_credential_status(
-        credential_status_index
+        status_list_index
     )
     return web.Response(text=credential_status_dict["credential"])
 
@@ -255,30 +254,36 @@ async def handle_get_authorize(request: Request, context: RequestContext):
     auth_req = AuthorizationRequestQueryParams.from_dict(query_params)
 
     issuer_state = auth_req.issuer_state
-    if not issuer_state:
-        raise web.HTTPBadRequest(text="issuer_state is required")
-
     state = auth_req.state
     client_id = auth_req.client_id
     code_challenge = auth_req.code_challenge
     code_challenge_method = auth_req.code_challenge_method
+    authorisation_request = auth_req.request
+    redirect_uri = auth_req.redirect_uri
 
     try:
         # TODO: Credential offers should be accessed only once.
         # TODO: If client_id is present then check if it matches.
-        credential_offer_entity = await context.legal_entity_service.update_credential_offer_from_issuer_state_jwt(
+        credential_offer_entity = await context.legal_entity_service.update_credential_offer_from_authorisation_request(
             issuer_state=issuer_state,
             authorisation_request_state=state,
             client_id=client_id,
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
-            redirect_uri=auth_req.redirect_uri,
+            redirect_uri=redirect_uri,
         )
         if not credential_offer_entity:
             raise web.HTTPBadRequest(text="Credential offer not found")
 
+        if authorisation_request:
+            authn_req_decoded = decode_header_and_claims_in_jwt(authorisation_request)
+            client_metadata = authn_req_decoded.claims.get("client_metadata")
+        else:
+            client_metadata = json.loads(auth_req.client_metadata)
+
         redirect_url = await context.legal_entity_service.prepare_redirect_url_with_id_token_request(
-            credential_offer_id=credential_offer_entity.id, auth_req=auth_req
+            credential_offer_id=credential_offer_entity.id,
+            client_metadata=client_metadata,
         )
     except CredentialOfferIsPreAuthorizedError as e:
         raise web.HTTPBadRequest(text=str(e))
@@ -327,7 +332,9 @@ class TokenReq(BaseModel):
     grant_type: constr(min_length=1, strip_whitespace=True)
     code: constr(min_length=1, strip_whitespace=True)
     client_id: constr(min_length=1, strip_whitespace=True)
-    code_verifier: constr(min_length=1, strip_whitespace=True)
+    code_verifier: Optional[constr(min_length=1, strip_whitespace=True)] = None
+    client_assertion: Optional[constr(min_length=1, strip_whitespace=True)] = None
+    client_assertion_type: Optional[constr(min_length=1, strip_whitespace=True)] = None
 
 
 @routes.post(
@@ -356,6 +363,8 @@ async def handle_post_token(request: Request, context: RequestContext):
                 code=token_req.code,
                 client_id=token_req.client_id,
                 code_verifier=token_req.code_verifier,
+                client_assertion=token_req.client_assertion,
+                client_assertion_type=token_req.client_assertion_type,
             )
         return web.json_response(token)
     except ValidationError as e:
@@ -431,6 +440,7 @@ async def handle_delete_credential_schema_by_id(
 class CreateCredentialOfferReq(BaseModel):
     issuance_mode: CredentialIssuanceModes
     is_pre_authorised: bool = False
+    supports_revocation: bool = False
     data_attribute_values: Optional[dict] = None
     user_pin: Optional[
         constr(min_length=4, max_length=4, pattern="^[0-9]{4}$", strip_whitespace=True)
@@ -458,6 +468,7 @@ async def handle_post_create_credential_offer(
             is_pre_authorised=create_credential_offer_req.is_pre_authorised,
             user_pin=create_credential_offer_req.user_pin,
             client_id=create_credential_offer_req.client_id,
+            supports_revocation=create_credential_offer_req.supports_revocation,
         )
 
         return web.json_response(credential_offer, status=201)
@@ -498,7 +509,7 @@ async def handle_patch_update_credential_offer(
             data_attribute_values=update_credential_offer_req.data_attribute_values,
         )
 
-        return web.json_response(credential_offer, status=201)
+        return web.json_response(credential_offer)
     except ValidateDataAttributeValuesAgainstDataAttributesError as e:
         raise web.HTTPBadRequest(text=str(e))
     except UpdateCredentialOfferError as e:
@@ -507,6 +518,56 @@ async def handle_patch_update_credential_offer(
         raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
     except json.decoder.JSONDecodeError:
         raise web.HTTPBadRequest(reason="Invalid JSON")
+
+
+@routes.post(
+    "/issuer/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}/revoke",
+    name="handle_post_revoke_credential_offer",
+)
+@inject_request_context()
+async def handle_post_revoke_credential_offer(
+    request: Request, context: RequestContext
+):
+    credential_schema_id = request.match_info.get("credential_schema_id")
+    credential_offer_id = request.match_info.get("credential_offer_id")
+
+    try:
+        credential_offer = await context.legal_entity_service.update_revocation_status_for_credential_offer(
+            credential_offer_id=credential_offer_id,
+            credential_schema_id=credential_schema_id,
+            is_revoked=True,
+        )
+
+        return web.json_response(credential_offer)
+    except CredentialOfferNotFoundError as e:
+        raise web.HTTPBadRequest(text=str(e))
+    except CredentialOfferRevocationError as e:
+        raise web.HTTPBadRequest(text=str(e))
+
+
+@routes.post(
+    "/issuer/credential-schema/{credential_schema_id}/credential-offer/{credential_offer_id}/unrevoke",
+    name="handle_post_unrevoke_credential_offer",
+)
+@inject_request_context()
+async def handle_post_unrevoke_credential_offer(
+    request: Request, context: RequestContext
+):
+    credential_schema_id = request.match_info.get("credential_schema_id")
+    credential_offer_id = request.match_info.get("credential_offer_id")
+
+    try:
+        credential_offer = await context.legal_entity_service.update_revocation_status_for_credential_offer(
+            credential_offer_id=credential_offer_id,
+            credential_schema_id=credential_schema_id,
+            is_revoked=False,
+        )
+
+        return web.json_response(credential_offer)
+    except CredentialOfferNotFoundError as e:
+        raise web.HTTPBadRequest(text=str(e))
+    except CredentialOfferRevocationError as e:
+        raise web.HTTPBadRequest(text=str(e))
 
 
 @routes.delete(

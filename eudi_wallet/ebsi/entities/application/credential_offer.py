@@ -2,7 +2,8 @@ import datetime
 import json
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text
+from sqlalchemy import (Boolean, Column, DateTime, ForeignKey, Integer, String,
+                        Text)
 from sqlalchemy.orm import relationship
 
 from eudi_wallet.ebsi.entities.base import Base
@@ -56,6 +57,21 @@ class CredentialOfferEntity(Base):
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     updated_at = Column(
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
+    )
+
+    # Revocation follows W3C StatusList2021 specification
+    # Each status list can contain at-most 131,072 entries
+    supports_revocation = Column(Boolean, default=False)
+    is_revoked = Column(Boolean, default=False)
+    credential_revocation_status_list_index = Column(Integer, nullable=False, default=-1)
+    credential_revocation_status_list_id = Column(
+        String(36),
+        ForeignKey("credential_revocation_status_list.id"),
+        nullable=True,
+    )
+    credential_revocation_status_list = relationship(
+        "CredentialRevocationStatusListEntity",
+        back_populates="credential_offer_entities",
     )
 
     def to_dict(self):

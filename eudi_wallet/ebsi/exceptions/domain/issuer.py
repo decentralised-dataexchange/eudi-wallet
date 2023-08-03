@@ -16,3 +16,11 @@ class ExpiredPreAuthorisedCodeTokenError(Exception):
 
 class CredentialPendingError(Exception):
     pass
+
+
+class CredentialRevocationStatusListNotFoundError(Exception):
+    pass
+
+
+class CredentialOfferRevocationError(Exception):
+    pass

@@ -5,6 +5,7 @@ import click
 from aiohttp import web
 from aiohttp.web_request import Request
 from aiokafka import AIOKafkaProducer
+from aiokafka.errors import KafkaConnectionError
 from pyngrok import ngrok  # type: ignore
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -107,8 +108,12 @@ def main(port, auth_token, kafka_broker_address, kafka_topic):
 
     loop = asyncio.get_event_loop()
 
-    producer = AIOKafkaProducer(bootstrap_servers=kafka_broker_address, loop=loop)
-    loop.run_until_complete(producer.start())
+    producer = None
+    try:
+        producer = AIOKafkaProducer(bootstrap_servers=kafka_broker_address, loop=loop)
+        loop.run_until_complete(producer.start())
+    except KafkaConnectionError as e:
+        logger.error(f"Unable to connect to Kafka broker: {e}")
 
     server = ServerSetup(db_session, producer, logger, kafka_topic)
     ngrok_tunnel = NgrokSetup(auth_token)
@@ -117,7 +122,7 @@ def main(port, auth_token, kafka_broker_address, kafka_topic):
 
     try:
         tunnel = ngrok_tunnel.configure_ngrok(port, WALLET_SUBDOMAIN)
-        print(f"ngrok tunnel URL: {tunnel.public_url}")
+        logger.info(f"ngrok tunnel URL: {tunnel.public_url}")
         loop.run_forever()
 
     except KeyboardInterrupt:
