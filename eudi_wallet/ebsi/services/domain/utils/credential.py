@@ -12,14 +12,15 @@ from eudi_wallet.ebsi.exceptions.domain.issuer import CredentialDeserializationE
 from eudi_wallet.ebsi.services.domain.utils.jwt import get_alg_for_key
 from eudi_wallet.ebsi.value_objects.domain.issuer import (
     CredentialTypes,
-    VerifiableAccreditationToAttest,
+    VerifiableAccreditation,
+    VerifiableAuthorisationForTrustChain,
     VerifiableAuthorisationToOnboard,
 )
 
 
 def deserialize_credential_jwt(
     credential_jwt: str,
-) -> typing.Union[VerifiableAuthorisationToOnboard, VerifiableAccreditationToAttest]:
+) -> typing.Union[VerifiableAuthorisationToOnboard, VerifiableAccreditation]:
     claims_encoded = credential_jwt.split(".")[1]
     claims_decoded = base64.b64decode(claims_encoded + "=" * (-len(claims_encoded) % 4))
     claims_dict = json.loads(claims_decoded)
@@ -29,7 +30,11 @@ def deserialize_credential_jwt(
     if credential_type == CredentialTypes.VerifiableAuthorisationToOnboard.value:
         return VerifiableAuthorisationToOnboard.from_dict(credential)
     elif credential_type == CredentialTypes.VerifiableAccreditationToAttest.value:
-        return VerifiableAccreditationToAttest.from_dict(credential)
+        return VerifiableAccreditation.from_dict(credential)
+    elif credential_type == CredentialTypes.VerifiableAccreditationToAccredit.value:
+        return VerifiableAccreditation.from_dict(credential)
+    elif credential_type == CredentialTypes.VerifiableAuthorisationForTrustChain.value:
+        return VerifiableAuthorisationForTrustChain.from_dict(credential)
     else:
         raise CredentialDeserializationError(
             f"Unknown credential type {credential_type}"

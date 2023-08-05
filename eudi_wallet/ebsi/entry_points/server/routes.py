@@ -17,7 +17,11 @@ from eudi_wallet.ebsi.entry_points.server.well_known import (
     get_well_known_authn_openid_config,
     get_well_known_openid_credential_issuer_config,
 )
-from eudi_wallet.ebsi.events.application.legal_entity import OnboardTrustedIssuerEvent
+from eudi_wallet.ebsi.events.application.legal_entity import (
+    OnboardRootTrustedAccreditationOrganisationEvent,
+    OnboardTrustedAccreditationOrganisationEvent,
+    OnboardTrustedIssuerEvent,
+)
 from eudi_wallet.ebsi.events.event_types import EventTypes
 from eudi_wallet.ebsi.events.wrapper import EventWrapper
 from eudi_wallet.ebsi.exceptions.application.legal_entity import (
@@ -46,7 +50,10 @@ from eudi_wallet.ebsi.value_objects.domain.authn import (
     AuthorisationGrants,
     AuthorizationRequestQueryParams,
 )
-from eudi_wallet.ebsi.value_objects.domain.issuer import CredentialIssuanceModes
+from eudi_wallet.ebsi.value_objects.domain.issuer import (
+    CredentialIssuanceModes,
+    IssuerTrustFrameworks,
+)
 
 routes = web.RouteTableDef()
 
@@ -91,37 +98,35 @@ async def handle_get_auth_jwks(request: Request, context: RequestContext):
     return await handle_get_jwks(request, context)
 
 
-@routes.get("/onboard", name="handle_get_trigger_trusted_issuer_flow")
+@routes.get("/onboard-ti", name="handle_get_onboard_trusted_issuer")
 @inject_request_context(raise_exception_if_legal_entity_not_found=False)
-async def handle_get_trigger_trusted_issuer_flow(
-    request: Request, context: RequestContext
-):
-    legal_entity_entity = context.legal_entity_service.legal_entity_entity
+async def handle_get_onboard_trusted_issuer(request: Request, context: RequestContext):
+    legal_entity_entity = await context.legal_entity_service.get_first_legal_entity()
 
-    if legal_entity_entity and (
-        legal_entity_entity.is_onboarding_in_progress
-        or legal_entity_entity.is_onboarded
+    if legal_entity_entity is not None and (
+        legal_entity_entity.is_onboarding_as_ti_in_progress
+        or legal_entity_entity.is_onboarded_as_ti
     ):
         return web.json_response(
             {
-                "is_onboarding_in_progress": legal_entity_entity.is_onboarding_in_progress,
-                "is_onboarded": legal_entity_entity.is_onboarded,
+                "is_onboarding_as_ti_in_progress": legal_entity_entity.is_onboarding_as_ti_in_progress,
+                "is_onboarded_as_ti": legal_entity_entity.is_onboarded_as_ti,
             }
         )
     else:
-        if not legal_entity_entity:
+        if legal_entity_entity is None:
             crypto_seed = f"{int(time.time())}"
             legal_entity_entity = (
                 await context.legal_entity_service.create_legal_entity(
                     cryptographic_seed=crypto_seed,
-                    is_onboarding_in_progress=True,
+                    is_onboarding_as_ti_in_progress=True,
                     role=LegalEntityRoles.TrustedIssuer.value,
                 )
             )
         else:
             legal_entity_entity = (
                 await context.legal_entity_service.update_legal_entity(
-                    legal_entity_entity.id, is_onboarding_in_progress=True
+                    legal_entity_entity.id, is_onboarding_as_ti_in_progress=True
                 )
             )
         event = OnboardTrustedIssuerEvent(
@@ -141,8 +146,127 @@ async def handle_get_trigger_trusted_issuer_flow(
         )
         return web.json_response(
             {
-                "is_onboarding_in_progress": legal_entity_entity.is_onboarding_in_progress,
-                "is_onboarded": legal_entity_entity.is_onboarded,
+                "is_onboarding_as_ti_in_progress": legal_entity_entity.is_onboarding_as_ti_in_progress,
+                "is_onboarded_as_ti": legal_entity_entity.is_onboarded_as_ti,
+            }
+        )
+
+
+@routes.get(
+    "/onboard-tao", name="handle_get_onboard_trusted_accreditation_organisation"
+)
+@inject_request_context(raise_exception_if_legal_entity_not_found=False)
+async def handle_get_onboard_trusted_accreditation_organisation(
+    request: Request, context: RequestContext
+):
+    legal_entity_entity = await context.legal_entity_service.get_first_legal_entity()
+
+    if legal_entity_entity is not None and (
+        legal_entity_entity.is_onboarding_as_tao_in_progress
+        or legal_entity_entity.is_onboarded_as_tao
+    ):
+        return web.json_response(
+            {
+                "is_onboarding_as_tao_in_progress": legal_entity_entity.is_onboarding_as_tao_in_progress,
+                "is_onboarded_as_tao": legal_entity_entity.is_onboarded_as_tao,
+            }
+        )
+    else:
+        if legal_entity_entity is None:
+            crypto_seed = f"{int(time.time())}"
+            legal_entity_entity = (
+                await context.legal_entity_service.create_legal_entity(
+                    cryptographic_seed=crypto_seed,
+                    is_onboarding_as_tao_in_progress=True,
+                    role=LegalEntityRoles.TrustedAccreditationOrganisation.value,
+                )
+            )
+        else:
+            legal_entity_entity = (
+                await context.legal_entity_service.update_legal_entity(
+                    legal_entity_entity.id, is_onboarding_as_tao_in_progress=True
+                )
+            )
+        event = OnboardTrustedAccreditationOrganisationEvent(
+            issuer_domain=context.app_context.domain,
+            crypto_seed=legal_entity_entity.cryptographic_seed,
+            openid_credential_issuer_config=context.app_context.credential_issuer_configuration,
+            auth_server_config=context.app_context.auth_server_configuration,
+        )
+        event_wrapper = EventWrapper(
+            event_type=EventTypes.OnboardTrustedAccreditationOrganisation.value,
+            payload=event.to_dict(),
+        )
+        await produce(
+            message=event_wrapper.to_json(),
+            topic=context.app_context.kafka_topic,
+            producer=context.app_context.kafka_producer,
+            logger=context.app_context.logger,
+        )
+        return web.json_response(
+            {
+                "is_onboarding_as_tao_in_progress": legal_entity_entity.is_onboarding_as_tao_in_progress,
+                "is_onboarded_as_tao": legal_entity_entity.is_onboarded_as_tao,
+            }
+        )
+
+
+@routes.get(
+    "/onboard-root-tao",
+    name="handle_get_onboard_root_trusted_accreditation_organisation",
+)
+@inject_request_context(raise_exception_if_legal_entity_not_found=False)
+async def handle_get_onboard_root_trusted_accreditation_organisation(
+    request: Request, context: RequestContext
+):
+    legal_entity_entity = await context.legal_entity_service.get_first_legal_entity()
+
+    if legal_entity_entity is not None and (
+        legal_entity_entity.is_onboarding_as_root_tao_in_progress
+        or legal_entity_entity.is_onboarded_as_root_tao
+    ):
+        return web.json_response(
+            {
+                "is_onboarding_as_root_tao_in_progress": legal_entity_entity.is_onboarding_as_root_tao_in_progress,
+                "is_onboarded_as_root_tao": legal_entity_entity.is_onboarded_as_root_tao,
+            }
+        )
+    else:
+        if legal_entity_entity is None:
+            crypto_seed = f"{int(time.time())}"
+            legal_entity_entity = (
+                await context.legal_entity_service.create_legal_entity(
+                    cryptographic_seed=crypto_seed,
+                    is_onboarding_as_root_tao_in_progress=True,
+                    role=LegalEntityRoles.TrustedAccreditationOrganisation.value,
+                )
+            )
+        else:
+            legal_entity_entity = (
+                await context.legal_entity_service.update_legal_entity(
+                    legal_entity_entity.id, is_onboarding_as_root_tao_in_progress=True
+                )
+            )
+        event = OnboardRootTrustedAccreditationOrganisationEvent(
+            issuer_domain=context.app_context.domain,
+            crypto_seed=legal_entity_entity.cryptographic_seed,
+            openid_credential_issuer_config=context.app_context.credential_issuer_configuration,
+            auth_server_config=context.app_context.auth_server_configuration,
+        )
+        event_wrapper = EventWrapper(
+            event_type=EventTypes.OnboardRootTrustedAccreditationOrganisation.value,
+            payload=event.to_dict(),
+        )
+        await produce(
+            message=event_wrapper.to_json(),
+            topic=context.app_context.kafka_topic,
+            producer=context.app_context.kafka_producer,
+            logger=context.app_context.logger,
+        )
+        return web.json_response(
+            {
+                "is_onboarding_as_root_tao_in_progress": legal_entity_entity.is_onboarding_as_root_tao_in_progress,
+                "is_onboarded_as_root_tao": legal_entity_entity.is_onboarded_as_root_tao,
             }
         )
 
@@ -221,9 +345,14 @@ async def handle_post_credential_deferred_request(
 async def handle_get_credential_status(request: Request, context: RequestContext):
     status_list_index = request.match_info.get("status_list_index")
 
-    credential_status_dict = await context.legal_entity_service.get_credential_status(
-        status_list_index
-    )
+    if status_list_index == "1":
+        credential_status_dict = await context.legal_entity_service.get_dummy_credential_status_for_insert_issuer_proxy(
+            status_list_index
+        )
+    else:
+        credential_status_dict = (
+            await context.legal_entity_service.get_credential_status(status_list_index)
+        )
     return web.Response(text=credential_status_dict["credential"])
 
 
@@ -269,6 +398,7 @@ async def handle_get_authorize(request: Request, context: RequestContext):
     authorisation_request = auth_req.request
     redirect_uri = auth_req.redirect_uri
     scope = auth_req.scope
+    request = auth_req.request
 
     try:
         # TODO: Credential offers should be accessed only once.
@@ -280,6 +410,7 @@ async def handle_get_authorize(request: Request, context: RequestContext):
             code_challenge=code_challenge,
             code_challenge_method=code_challenge_method,
             redirect_uri=redirect_uri,
+            authn_request=request,
         )
         if not credential_offer_entity:
             raise web.HTTPBadRequest(text="Credential offer not found")
@@ -406,7 +537,7 @@ class DataAttributeReq(BaseModel):
 
 
 class CredentialSchemaReq(BaseModel):
-    credential_type: constr(min_length=1, strip_whitespace=True)
+    credential_types: List[constr(min_length=1, strip_whitespace=True)]
     data_attributes: List[DataAttributeReq]
 
 
@@ -420,7 +551,7 @@ async def handle_post_create_credential_schema(
         credential_schema_req = CredentialSchemaReq(**data)
 
         credential_schema = await context.legal_entity_service.create_credential_schema(
-            credential_type=credential_schema_req.credential_type,
+            credential_types=credential_schema_req.credential_types,
             data_attributes=[
                 data_attribute.model_dump()
                 for data_attribute in credential_schema_req.data_attributes
@@ -468,6 +599,7 @@ class CreateCredentialOfferReq(BaseModel):
     issuance_mode: CredentialIssuanceModes
     is_pre_authorised: bool = False
     supports_revocation: bool = False
+    trust_framework: Optional[IssuerTrustFrameworks] = None
     data_attribute_values: Optional[dict] = None
     user_pin: Optional[
         constr(min_length=4, max_length=4, pattern="^[0-9]{4}$", strip_whitespace=True)
@@ -491,11 +623,12 @@ async def handle_post_create_credential_offer(
         credential_offer = await context.legal_entity_service.create_credential_offer(
             credential_schema_id=credential_schema_id,
             data_attribute_values=create_credential_offer_req.data_attribute_values,
-            issuance_mode=create_credential_offer_req.issuance_mode.value,
+            issuance_mode=create_credential_offer_req.issuance_mode,
             is_pre_authorised=create_credential_offer_req.is_pre_authorised,
             user_pin=create_credential_offer_req.user_pin,
             client_id=create_credential_offer_req.client_id,
             supports_revocation=create_credential_offer_req.supports_revocation,
+            trust_framework=create_credential_offer_req.trust_framework,
         )
 
         return web.json_response(credential_offer, status=201)

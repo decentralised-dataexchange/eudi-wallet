@@ -46,18 +46,12 @@ class SqlAlchemyCredentialOfferRepository:
             )
             return None
 
-    def get_by_client_id(self, client_id: str) -> Union[CredentialOfferEntity, None]:
-        try:
-            return (
-                self.session.query(CredentialOfferEntity)
-                .filter(CredentialOfferEntity.client_id == client_id)
-                .one()
-            )
-        except exc.NoResultFound:
-            self.logger.debug(
-                f"No CredentialOfferEntity found with client id {client_id}"
-            )
-            return None
+    def get_all_by_client_id(self, client_id: str) -> List[CredentialOfferEntity]:
+        return (
+            self.session.query(CredentialOfferEntity)
+            .filter(CredentialOfferEntity.client_id == client_id)
+            .all()
+        )
 
     def get_by_id(self, id: str) -> Union[CredentialOfferEntity, None]:
         try:

@@ -28,6 +28,8 @@ sqlalchemy = "^2.0.19"
 pytz = "^2023.3"
 pydantic = "^2.1.1"
 aiokafka = "^0.8.1"
+tenacity = "^8.2.2"
+httpx = "^0.24.1"
 
 [tool.poetry.dev-dependencies]
 jupyter = "^1.0.0"

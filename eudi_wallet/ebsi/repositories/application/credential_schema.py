@@ -83,7 +83,7 @@ class SqlAlchemyCredentialSchemaRepository:
     def create(
         self,
         legal_entity_id: str,
-        credential_type: str,
+        credential_types: str,
         data_attributes: str,
         **kwargs,
     ) -> CredentialSchemaEntity:
@@ -91,7 +91,7 @@ class SqlAlchemyCredentialSchemaRepository:
         legal_entity = CredentialSchemaEntity(
             id=id,
             legal_entity_id=legal_entity_id,
-            credential_type=credential_type,
+            credential_types=credential_types,
             data_attributes=data_attributes,
             **kwargs,
         )

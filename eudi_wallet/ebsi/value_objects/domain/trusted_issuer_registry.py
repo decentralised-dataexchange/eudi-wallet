@@ -7,11 +7,11 @@ from dataclasses_json import DataClassJsonMixin, config
 @dataclass
 class InsertIssuerParams(DataClassJsonMixin):
     did: str
-    attributeData: str
     issuerType: int
     taoDid: str
     taoAttributeId: str
     _from: str = field(metadata=config(field_name="from"))
+    attributeData: typing.Optional[str] = None
 
 
 @dataclass
@@ -77,3 +77,56 @@ class ProxyData(DataClassJsonMixin):
     prefix: str
     headers: dict
     testSuffix: str
+
+
+@dataclass
+class ProxyItem(DataClassJsonMixin):
+    proxyId: str
+    href: str
+
+
+@dataclass
+class ListProxiesResponse(DataClassJsonMixin):
+    items: typing.List[ProxyItem]
+    total: int
+
+
+@dataclass
+class AttributeItem(DataClassJsonMixin):
+    id: str
+    href: str
+
+
+@dataclass
+class Links(DataClassJsonMixin):
+    first: str
+    prev: str
+    next: str
+    last: str
+
+
+@dataclass
+class ListIssuerAttributesResponse(DataClassJsonMixin):
+    self: str
+    items: typing.List[AttributeItem]
+    total: int
+    pageSize: int
+    links: Links
+
+
+@dataclass
+class SetAttributeMetadataParams(DataClassJsonMixin):
+    did: str
+    attributeId: str
+    issuerType: int
+    taoDid: str
+    taoAttributeId: str
+    _from: str = field(metadata=config(field_name="from"))
+
+
+@dataclass
+class SetAttributeMetadataJSONRPC20RequestBody(DataClassJsonMixin):
+    params: typing.List[SetAttributeMetadataParams] = None
+    id: typing.Optional[str] = None
+    jsonrpc: str = "2.0"
+    method: str = "setAttributeMetadata"

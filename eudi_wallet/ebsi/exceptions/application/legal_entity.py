@@ -56,3 +56,15 @@ class UserPinRequiredError(Exception):
 
 class ClientIdRequiredError(Exception):
     pass
+
+
+class OnboardingToEBSIError(Exception):
+    pass
+
+
+class OnboardingToDIDRegistryError(OnboardingToEBSIError):
+    pass
+
+
+class OnboardingToTrustedIssuersRegistryError(OnboardingToEBSIError):
+    pass

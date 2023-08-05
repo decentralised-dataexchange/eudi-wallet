@@ -2,7 +2,7 @@ import uuid
 from collections import namedtuple
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from dataclasses_json import DataClassJsonMixin, config
 
@@ -42,12 +42,13 @@ class AuthorisationGrants(Enum):
 
 @dataclass
 class IDTokenRequest(DataClassJsonMixin):
-    client_id: str
-    response_type: str
-    scope: str
-    redirect_uri: str
-    request_uri: str
-    nonce: str
+    client_id: Optional[str] = None
+    response_type: Optional[str] = None
+    scope: Optional[str] = None
+    redirect_uri: Optional[str] = None
+    request_uri: Optional[str] = None
+    nonce: Optional[str] = None
+    request: Optional[str] = None
 
 
 @dataclass
@@ -62,19 +63,6 @@ class CreateClientAssertion(DataClassJsonMixin):
 @dataclass
 class ClientAssertionJWTToken(DataClassJsonMixin):
     token: str
-
-
-@dataclass
-class IDTokenRequestJWT(DataClassJsonMixin):
-    state: str
-    client_id: str
-    redirect_uri: str
-    response_type: str
-    response_mode: str
-    scope: str
-    nonce: str
-    iss: str
-    aud: str
 
 
 @dataclass
@@ -156,24 +144,41 @@ class GetPresentationDefinitionPayload(DataClassJsonMixin):
 
 
 @dataclass
-class PresentationDefinition(DataClassJsonMixin):
-    id: str
-    input_descriptors: List["InputDescriptor"]
-    format: "Format"
+class Filter:
+    type: Optional[str] = None
+    contains: Optional[Dict[str, str]] = None
+
+
+@dataclass
+class Path:
+    path: Optional[List[str]] = None
+    filter: Optional[Filter] = None
+
+
+@dataclass
+class Constraints:
+    fields: Optional[List[Path]] = None
 
 
 @dataclass
 class InputDescriptor(DataClassJsonMixin):
-    id: str
-    name: str
-    purpose: str
-    constraints: dict
+    id: Optional[str] = None
+    name: Optional[str] = None
+    purpose: Optional[str] = None
+    constraints: Optional[Constraints] = None
 
 
 @dataclass
 class Format(DataClassJsonMixin):
-    jwt_vc: dict
-    jwt_vp: dict
+    jwt_vc: Optional[dict] = None
+    jwt_vp: Optional[dict] = None
+
+
+@dataclass
+class PresentationDefinition(DataClassJsonMixin):
+    id: Optional[str] = None
+    input_descriptors: Optional[List[InputDescriptor]] = None
+    format: Optional[Format] = None
 
 
 @dataclass
@@ -222,3 +227,18 @@ class VpJwtTokenPayloadModel(DataClassJsonMixin):
 class VpJwtTokenModel(DataClassJsonMixin):
     token: str
     presentation_submission: PresentationSubmission
+
+
+@dataclass
+class IDTokenRequestJWT(DataClassJsonMixin):
+    state: Optional[str] = None
+    client_id: Optional[str] = None
+    redirect_uri: Optional[str] = None
+    response_type: Optional[str] = None
+    response_mode: Optional[str] = None
+    scope: Optional[str] = None
+    nonce: Optional[str] = None
+    presentation_definition: Optional[PresentationDefinition] = None
+    iss: Optional[str] = None
+    aud: Optional[str] = None
+    exp: Optional[int] = None

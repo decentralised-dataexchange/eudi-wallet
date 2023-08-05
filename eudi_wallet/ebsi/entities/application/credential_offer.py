@@ -62,6 +62,18 @@ class CredentialOfferEntity(Base):
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
 
+    did = Column(String, nullable=True)
+
+    # In EBSI, the trusted issuer and trusted accreditation organisation
+    # issuer types are registered to trusted issuers registry.
+    # Each issuer type has a corresponding reserved attribute id.
+    # This reserved attribute holds the verifiable accreditation
+    # that proves that these DIDs are of this issuer type and who
+    # accredited them. Using this attribute ids, it is possible to
+    # mark the DID as revoked for that particular issuer type.
+    trusted_issuer_attribute_id = Column(String, nullable=True)
+    trusted_accreditation_organisation_attribute_id = Column(String, nullable=True)
+
     # Revocation follows W3C StatusList2021 specification
     # Each status list can contain at-most 131,072 entries
     supports_revocation = Column(Boolean, default=False)
@@ -78,6 +90,8 @@ class CredentialOfferEntity(Base):
         "CredentialRevocationStatusListEntity",
         back_populates="credential_offer_entities",
     )
+
+    trust_framework = Column(String, nullable=True)
 
     def to_dict(self):
         result = {c.name: getattr(self, c.name) for c in self.__table__.columns}

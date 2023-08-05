@@ -28,7 +28,7 @@ class CredentialSchemaEntity(Base):
     )
     legal_entity = relationship("LegalEntityEntity", back_populates="credential_schemas")
 
-    credential_type = Column(String, nullable=False)
+    credential_types = Column(String, nullable=False)
 
     # List of data attributes
     data_attributes = Column(Text, nullable=False)
@@ -49,5 +49,9 @@ class CredentialSchemaEntity(Base):
         # Convert data attributes to list from string
         if "data_attributes" in result and isinstance(result["data_attributes"], str):
             result["data_attributes"] = json.loads(result["data_attributes"])
+        
+        # Convert credential types to list from string
+        if "credential_types" in result and isinstance(result["credential_types"], str):
+            result["credential_types"] = json.loads(result["credential_types"])
 
         return result

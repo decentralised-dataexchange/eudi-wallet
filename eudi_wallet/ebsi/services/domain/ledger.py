@@ -7,6 +7,7 @@ from web3.auto import w3
 
 from eudi_wallet.ebsi.exceptions.domain.ledger import SendSignedTransactionError
 from eudi_wallet.ebsi.utils.http_client import HttpClient
+from eudi_wallet.ebsi.utils.httpx_client import HttpxClient
 from eudi_wallet.ebsi.value_objects.domain.ledger import (
     GetTransactionReceiptJSONRPC20RequestBody,
     SendSignedTransactionJSONRPC20RequestBody,
@@ -52,12 +53,12 @@ class LedgerService:
             "Authorization": f"Bearer {self.access_token}",
         }
 
-        async with HttpClient() as http_client:
+        async with HttpxClient(logger=self.logger) as http_client:
             response = await http_client.post(
                 self.registry_rpc_endpoint, payload.to_json(), headers
             )
-        if response.status == 200:
-            rpc_response_dict = await response.json()
+        if response.status_code == 200:
+            rpc_response_dict = response.json()
             return SendSignedTransactionJSONRPC20ResponseBody.from_dict(
                 rpc_response_dict
             )
@@ -76,7 +77,7 @@ class LedgerService:
         }
 
         async def check_transaction_result(res: Response):
-            transaction_result = await res.json()
+            transaction_result = res.json()
             receipt = transaction_result.get("result")
 
             if receipt:
@@ -92,8 +93,8 @@ class LedgerService:
                         f"Transaction failed: Status {receipt['status']}. Revert reason: {revert_reason}"
                     )
 
-        async with HttpClient() as http_client:
-            await http_client.call_every_n_seconds(
+        async with HttpxClient(logger=self.logger) as http_client:
+            response = await http_client.call_every_n_seconds(
                 "post",
                 self.besu_rpc_endpoint,
                 check_transaction_result,
@@ -101,11 +102,11 @@ class LedgerService:
                 headers,
                 5,
             )
-            response = await http_client.post(
-                self.besu_rpc_endpoint, payload.to_json(), headers
-            )
-        if response.status == 200:
-            rpc_response = await response.json()
+            # response = await http_client.post(
+            #     self.besu_rpc_endpoint, payload.to_json(), headers
+            # )
+        if response.status_code == 200:
+            rpc_response = response.json()
             return TransactionReceiptJSONRPC20ResponseBody.from_dict(rpc_response)
         else:
             raise SendSignedTransactionError(

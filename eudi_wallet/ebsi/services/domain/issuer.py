@@ -4,6 +4,7 @@ import logging
 import time
 import typing
 
+from httpx import Response
 from jwcrypto import jwk, jwt
 
 from eudi_wallet.ebsi.exceptions.domain.issuer import (
@@ -12,7 +13,7 @@ from eudi_wallet.ebsi.exceptions.domain.issuer import (
     InvalidIssuerStateTokenError,
 )
 from eudi_wallet.ebsi.services.domain.utils.jwt import get_alg_for_key
-from eudi_wallet.ebsi.utils.http_client import HttpClient
+from eudi_wallet.ebsi.utils.httpx_client import HttpxClient
 from eudi_wallet.ebsi.value_objects.domain.issuer import (
     CredentialResponse,
     SendCredentialRequest,
@@ -24,9 +25,39 @@ class IssuerService:
         self,
         credential_endpoint: typing.Optional[str] = None,
         logger: typing.Optional[logging.Logger] = None,
+        credential_deferred_endpoint: typing.Optional[str] = None,
     ):
         self.credential_endpoint = credential_endpoint
+        self.credential_deferred_endpoint = credential_deferred_endpoint
         self.logger = logger
+
+    async def send_credential_deferred_request(
+        self, acceptance_token
+    ) -> CredentialResponse:
+        assert (
+            self.credential_deferred_endpoint is not None
+        ), "No credential deferred endpoint set"
+        headers = {
+            "Authorization": f"Bearer {acceptance_token}",
+        }
+
+        async def is_credential_available(res: Response):
+            return res.status_code == 200
+
+        async with HttpxClient(logger=self.logger) as http_client:
+            response = await http_client.call_every_n_seconds(
+                "post",
+                self.credential_deferred_endpoint,
+                is_credential_available,
+                {},
+                headers,
+                5,
+            )
+        if response.status_code == 200:
+            credential_dict = response.json()
+            return CredentialResponse.from_dict(credential_dict)
+        else:
+            raise CredentialRequestError("Invalid response status")
 
     async def send_credential_request(
         self,
@@ -37,10 +68,10 @@ class IssuerService:
             "Authorization": f"Bearer {send_credential_request.token}",
         }
         data = json.dumps(dataclasses.asdict(send_credential_request.payload))
-        async with HttpClient() as http_client:
+        async with HttpxClient(logger=self.logger) as http_client:
             response = await http_client.post(self.credential_endpoint, data, headers)
-        if response.status == 200:
-            credential_dict = await response.json()
+        if response.status_code == 200:
+            credential_dict = response.json()
             return CredentialResponse.from_dict(credential_dict)
         else:
             raise CredentialRequestError("Invalid response status")

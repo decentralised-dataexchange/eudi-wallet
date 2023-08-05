@@ -29,7 +29,12 @@ class SqlAlchemyLegalRepository:
         return True
 
     def get_first(self) -> Union[LegalEntityEntity, None]:
-        return self.session.query(LegalEntityEntity).first()
+        try:
+            legal_entity = self.session.query(LegalEntityEntity).first()
+            return legal_entity
+        except Exception as e:
+            print(e)
+            return None
 
     def update(self, id: str, **kwargs) -> Union[LegalEntityEntity, None]:
         try:

@@ -16,3 +16,7 @@ class InvalidAccessTokenError(Exception):
 
 class InvalidAcceptanceTokenError(Exception):
     pass
+
+
+class SendVPTokenResponseError(Exception):
+    pass

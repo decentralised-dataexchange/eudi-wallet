@@ -2,7 +2,7 @@ import asyncio
 import logging
 import typing
 
-import aiohttp
+import httpx
 from tenacity import (
     after_log,
     before_log,
@@ -12,8 +12,10 @@ from tenacity import (
     wait_fixed,
 )
 
+from eudi_wallet.ebsi.exceptions.domain.issuer import CredentialRequestError
 
-class HttpClient:
+
+class HttpxClient:
     def __init__(
         self,
         retry_attempts: int = 3,
@@ -21,7 +23,7 @@ class HttpClient:
         timeout: int = 10,
         logger: typing.Optional[logging.Logger] = None,
     ):
-        self.session = None
+        self.client = None
         self.retry_attempts = retry_attempts
         self.retry_wait = retry_wait
         self.timeout = timeout
@@ -34,54 +36,52 @@ class HttpClient:
             self.before = self.after = None
 
     async def __aenter__(self):
-        self.session = aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=self.timeout)
-        )
+        self.client = httpx.AsyncClient(timeout=self.timeout)
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
-        await self.session.close()
-        self.session = None
+        await self.client.aclose()
+        self.client = None
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_fixed(1),
-        retry=retry_if_exception_type((asyncio.exceptions.TimeoutError,)),
+        retry=retry_if_exception_type((httpx.TimeoutException,)),
     )
     async def get(
         self, url: str, headers=None, allow_redirects: bool = False
-    ) -> aiohttp.ClientResponse:
-        if self.session is None:
-            raise RuntimeError("Session is closed")
+    ) -> httpx.Response:
+        if self.client is None:
+            raise RuntimeError("Client is closed")
 
-        return await self.session.get(
-            url, headers=headers, allow_redirects=allow_redirects
+        return await self.client.get(
+            url, headers=headers, follow_redirects=allow_redirects
         )
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_fixed(1),
-        retry=retry_if_exception_type((asyncio.exceptions.TimeoutError,)),
+        retry=retry_if_exception_type((httpx.TimeoutException)),
     )
     async def post(
         self, url: str, data=None, headers=None, allow_redirects: bool = False
-    ) -> aiohttp.ClientResponse:
-        if self.session is None:
-            raise RuntimeError("Session is closed")
+    ) -> httpx.Response:
+        if self.client is None:
+            raise RuntimeError("Client is closed")
 
-        return await self.session.post(
-            url, data=data, headers=headers, allow_redirects=allow_redirects
+        return await self.client.post(
+            url, data=data, headers=headers, follow_redirects=allow_redirects
         )
 
     async def call_every_n_seconds(
         self,
         method: str,
         url: str,
-        condition: typing.Callable[[aiohttp.ClientResponse], bool],
+        condition: typing.Callable[[httpx.Response], bool],
         data: typing.Optional[typing.Dict] = None,
         headers: typing.Optional[typing.Dict] = None,
         n: int = 5,
-    ) -> aiohttp.ClientResponse:
+    ) -> httpx.Response:
         while True:
             if method.lower() == "get":
                 response = await self.get(url, headers=headers)

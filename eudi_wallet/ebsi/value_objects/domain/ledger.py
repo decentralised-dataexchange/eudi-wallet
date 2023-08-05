@@ -63,20 +63,20 @@ class TransactionReceiptLog(DataClassJsonMixin):
 
 @dataclass
 class TransactionReceiptResult(DataClassJsonMixin):
-    blockHash: str = None
-    blockNumber: str = None
+    blockHash: typing.Optional[str] = None
+    blockNumber: typing.Optional[str] = None
     contractAddress: typing.Optional[str] = None
-    cumulativeGasUsed: str = None
-    from_: str = None
-    gasUsed: str = None
-    effectiveGasPrice: str = None
-    logs: typing.List[TransactionReceiptLog] = None
-    logsBloom: str = None
-    status: str = None
-    to: str = None
-    transactionHash: str = None
-    transactionIndex: str = None
-    type: str = None
+    cumulativeGasUsed: typing.Optional[str] = None
+    from_: typing.Optional[str] = None
+    gasUsed: typing.Optional[str] = None
+    effectiveGasPrice: typing.Optional[str] = None
+    logs: typing.Optional[typing.List[TransactionReceiptLog]] = None
+    logsBloom: typing.Optional[str] = None
+    status: typing.Optional[str] = None
+    to: typing.Optional[str] = None
+    transactionHash: typing.Optional[str] = None
+    transactionIndex: typing.Optional[str] = None
+    type: typing.Optional[str] = None
 
 
 @dataclass

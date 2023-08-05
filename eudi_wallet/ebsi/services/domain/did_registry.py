@@ -7,6 +7,7 @@ from eudi_wallet.ebsi.exceptions.domain.did_registry import (
     InsertDIDDocumentError,
 )
 from eudi_wallet.ebsi.utils.http_client import HttpClient
+from eudi_wallet.ebsi.utils.httpx_client import HttpxClient
 from eudi_wallet.ebsi.value_objects.domain.did_registry import (
     AddVerificationMethodJSONRPC20RequestBody,
     AddVerificationMethodJSONRPC20ResponseBody,
@@ -37,18 +38,20 @@ class DIDRegistryService:
         self,
         payload: InsertDIDDocumentJSONRPC20RequestBody,
     ) -> InsertDIDDocumentJSONRPC20ResponseBody:
-        assert self.did_registry_rpc_endpoint, "DID registry RPC endpoint is not set"
-        assert self.access_token, "Access token is not set"
+        assert (
+            self.did_registry_rpc_endpoint is not None
+        ), "DID registry RPC endpoint is not set"
+        assert self.access_token is not None, "Access token is not set"
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.access_token}",
         }
-        async with HttpClient() as http_client:
+        async with HttpxClient(logger=self.logger) as http_client:
             response = await http_client.post(
                 self.did_registry_rpc_endpoint, payload.to_json(), headers
             )
-        if response.status == 200:
-            rpc_result = await response.json()
+        if response.status_code == 200:
+            rpc_result = response.json()
             return InsertDIDDocumentJSONRPC20ResponseBody.from_dict(rpc_result)
         else:
             raise InsertDIDDocumentError(
@@ -59,18 +62,20 @@ class DIDRegistryService:
         self,
         payload: AddVerificationMethodJSONRPC20RequestBody,
     ) -> AddVerificationMethodJSONRPC20ResponseBody:
-        assert self.did_registry_rpc_endpoint, "DID registry RPC endpoint is not set"
-        assert self.access_token, "Access token is not set"
+        assert (
+            self.did_registry_rpc_endpoint is not None
+        ), "DID registry RPC endpoint is not set"
+        assert self.access_token is not None, "Access token is not set"
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.access_token}",
         }
-        async with HttpClient() as http_client:
+        async with HttpxClient(logger=self.logger) as http_client:
             response = await http_client.post(
                 self.did_registry_rpc_endpoint, payload.to_json(), headers
             )
-        if response.status == 200:
-            rpc_result = await response.json()
+        if response.status_code == 200:
+            rpc_result = response.json()
             return AddVerificationMethodJSONRPC20ResponseBody.from_dict(rpc_result)
         else:
             raise AddVerificationMethodError(
@@ -81,18 +86,20 @@ class DIDRegistryService:
         self,
         payload: AddVerificationRelationshipJSONRPC20RequestBody,
     ) -> AddVerificationRelationshipJSONRPC20ResponseBody:
-        assert self.did_registry_rpc_endpoint, "DID registry RPC endpoint is not set"
-        assert self.access_token, "Access token is not set"
+        assert (
+            self.did_registry_rpc_endpoint is not None
+        ), "DID registry RPC endpoint is not set"
+        assert self.access_token is not None, "Access token is not set"
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.access_token}",
         }
-        async with HttpClient() as http_client:
+        async with HttpxClient(logger=self.logger) as http_client:
             response = await http_client.post(
                 self.did_registry_rpc_endpoint, payload.to_json(), headers
             )
-        if response.status == 200:
-            rpc_result = await response.json()
+        if response.status_code == 200:
+            rpc_result = response.json()
             return AddVerificationRelationshipJSONRPC20ResponseBody.from_dict(
                 rpc_result
             )

@@ -5,6 +5,19 @@ from enum import Enum
 from dataclasses_json import DataClassJsonMixin, config
 
 
+class IssuerTrustFrameworks(Enum):
+    EBSI = "EBSI"
+
+
+class EBSICredentialTypes(Enum):
+    VerifiableAuthorisationToOnboard = "VerifiableAuthorisationToOnboard"
+    VerifiableAccreditationToAttest = "VerifiableAccreditationToAttest"
+    VerifiableAccreditationToAccredit = "VerifiableAccreditationToAccredit"
+    CTAAQualificationCredential = "CTAAQualificationCredential"
+    CTWalletQualificationCredential = "CTWalletQualificationCredential"
+    CTRevocable = "CTRevocable"
+
+
 class CredentialTypes(Enum):
     VerifiableCredential = "VerifiableCredential"
     VerifiableAttestation = "VerifiableAttestation"
@@ -37,6 +50,7 @@ class AcceptanceTokenResponse(DataClassJsonMixin):
 
 @dataclass
 class CredentialResponse(DataClassJsonMixin):
+    acceptance_token: typing.Optional[str] = None
     format: typing.Optional[str] = None
     credential: typing.Optional[str] = None
     c_nonce: typing.Optional[str] = None
@@ -127,20 +141,20 @@ class AccreditedFor(DataClassJsonMixin):
 
 
 @dataclass
-class VAACredentialSubject(DataClassJsonMixin):
+class VACredentialSubject(DataClassJsonMixin):
     accreditedFor: typing.List[AccreditedFor]
     reservedAttributeId: str
     _id: str = field(metadata=config(field_name="id"))
 
 
 @dataclass
-class VerifiableAccreditationToAttest(DataClassJsonMixin):
+class VerifiableAccreditation(DataClassJsonMixin):
     issuer: str
     issuanceDate: str
     issued: str
     validFrom: str
     expirationDate: str
-    credentialSubject: VAACredentialSubject
+    credentialSubject: VACredentialSubject
     credentialSchema: CredentialSchema
     termsOfUse: TermsOfUse
     _id: str = field(metadata=config(field_name="id"))
@@ -159,3 +173,23 @@ class CredentialRequest(DataClassJsonMixin):
     format: str
     types: typing.List[str]
     proof: CredentialRequestProof
+
+@dataclass
+class VATCCredentialSubject(DataClassJsonMixin):
+    reservedAttributeId: str
+    _id: str = field(metadata=config(field_name="id"))
+
+
+@dataclass
+class VerifiableAuthorisationForTrustChain(DataClassJsonMixin):
+    issuer: str
+    issuanceDate: str
+    issued: str
+    validFrom: str
+    expirationDate: str
+    credentialSubject: VATCCredentialSubject
+    credentialSchema: CredentialSchema
+    termsOfUse: TermsOfUse
+    context: typing.List[str] = field(metadata=config(field_name="@context"))
+    _id: str = field(metadata=config(field_name="id"))
+    _type: typing.List[str] = field(metadata=config(field_name="type"))

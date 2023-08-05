@@ -96,15 +96,15 @@ class KeyDid:
         jwk_dict = json.loads(jwk_str)
         return jwk.JWK(**jwk_dict)
 
-    def generate_id_token(self, auth_server_uri: str, nonce: str) -> str:
+    def generate_id_token(self, did: str = None, auth_server_uri: str = None, nonce: str = None) -> str:
         header = {
             "typ": "JWT",
             "alg": "ES256",
-            "kid": f"{self._did}#{self._method_specific_id}",
+            "kid": f"{did or self._did}#{self._key.key_id}",
         }
         payload = {
-            "iss": self._did,
-            "sub": self._did,
+            "iss": did or self._did,
+            "sub": did or self._did,
             "aud": auth_server_uri,
             "exp": int(time.time()) + 3600,
             "iat": int(time.time()),
@@ -116,11 +116,11 @@ class KeyDid:
 
         return token.serialize()
 
-    def generate_credential_request(self, issuer_uri: str, nonce: str) -> str:
+    def generate_credential_request(self, did: str = None, issuer_uri: str = None, nonce: str = None) -> str:
         header = {
             "typ": "openid4vci-proof+jwt",
             "alg": "ES256",
-            "kid": f"{self._did}#{self._method_specific_id}",
+            "kid": f"{did or self._did}#{self._key.key_id}",
         }
         payload = {
             "iss": self._did,

@@ -16,10 +16,13 @@ from coincurve import PublicKey
 from eudi_wallet.did_jwt import create_jwt, decode_jwt
 from eudi_wallet.did_jwt.signer_algorithm import ES256K_signer_algorithm
 from eudi_wallet.ethereum import Ethereum
-from eudi_wallet.util import (get_element_by_index_from_list, http_call,
-                              http_call_text,
-                              http_call_text_redirects_disabled,
-                              parse_query_string_parameters_from_url)
+from eudi_wallet.util import (
+    get_element_by_index_from_list,
+    http_call,
+    http_call_text,
+    http_call_text_redirects_disabled,
+    parse_query_string_parameters_from_url,
+)
 
 
 def get_audience(jwt):
@@ -270,6 +273,7 @@ class CredentialTypes(Enum):
     CTWalletCrossPreAuthorised = "CTWalletCrossPreAuthorised"
     CTWalletQualificationCredential = "CTWalletQualificationCredential"
     CTIssueQualificationCredential = "CTIssueQualificationCredential"
+    CTAAQualificationCredential = "CTAAQualificationCredential"
 
 
 async def fetch_credential_offer(client_id: str, credential_type: CredentialTypes):
@@ -432,6 +436,7 @@ async def exchange_auth_code_for_access_token(
     access_token_response = await http_call(
         token_uri, "POST", data=encoded_params, headers=headers
     )
+    print(access_token_response)
     return AccessTokenResponse(**access_token_response)
 
 

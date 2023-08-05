@@ -6,16 +6,16 @@ from jwcrypto import jwk, jwt  # type: ignore
 from jwcrypto.common import json_decode
 
 from eudi_wallet.ebsi.exceptions.domain.authn import (
-    AuthorizationCodeRedirectError,
     InvalidAccessTokenError,
     InvalidResponseStatusError,
     SendIDTokenResponseError,
+    SendVPTokenResponseError,
 )
 from eudi_wallet.ebsi.services.domain.authn_request_builder import (
     AuthorizationRequestBuilder,
 )
 from eudi_wallet.ebsi.services.domain.utils.jwt import get_alg_for_key
-from eudi_wallet.ebsi.utils.http_client import HttpClient
+from eudi_wallet.ebsi.utils.httpx_client import HttpxClient
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
 from eudi_wallet.ebsi.value_objects.domain.authn import (
     AuthorizationCodeRedirectResponse,
@@ -39,12 +39,14 @@ class AuthnService:
         self,
         authorization_endpoint: typing.Optional[str] = None,
         presentation_definition_endpoint: typing.Optional[str] = None,
+        direct_post_endpoint: typing.Optional[str] = None,
         token_endpoint: typing.Optional[str] = None,
         logger: typing.Optional[Logger] = None,
     ):
         self.authorization_endpoint = authorization_endpoint
         self.presentation_definition_endpoint = presentation_definition_endpoint
         self.token_endpoint = token_endpoint
+        self.direct_post_endpoint = direct_post_endpoint
         self.logger = logger
 
     def create_authorization_request(
@@ -67,12 +69,14 @@ class AuthnService:
         request: str,
         nonce: str,
     ) -> IDTokenRequest:
-        assert self.authorization_endpoint, "Authorization endpoint is not set"
+        assert (
+            self.authorization_endpoint is not None
+        ), "Authorization endpoint is not set"
         query_params = f"client_id={client_id}&response_type=code&scope={scope}&redirect_uri={redirect_uri}&request={request}&nonce={nonce}"
         url = f"{self.authorization_endpoint}?{query_params}"
-        async with HttpClient() as http_client:
+        async with HttpxClient(logger=self.logger) as http_client:
             response = await http_client.get(url)
-        if response.status != 302:
+        if response.status_code != 302:
             raise InvalidResponseStatusError("Invalid response status")
 
         location_header_value = response.headers["Location"].split("'")[0]
@@ -95,14 +99,15 @@ class AuthnService:
             redirect_uri=query_params.get("redirect_uri", [""])[0],
             request_uri=query_params.get("request_uri", [""])[0],
             nonce=query_params.get("nonce", [""])[0],
+            request=query_params.get("request", [""])[0],
         )
 
     async def get_id_token_request_jwt(self, request_uri: str) -> IDTokenRequestJWT:
-        async with HttpClient() as http_client:
+        async with HttpxClient(logger=self.logger) as http_client:
             response = await http_client.get(request_uri)
-        if response.status != 200:
+        if response.status_code != 200:
             raise InvalidResponseStatusError("Invalid response status")
-        token_request_jwt = await response.text()
+        token_request_jwt = response.text
         decoded_token_request = decode_header_and_claims_in_jwt(token_request_jwt)
         return IDTokenRequestJWT(**decoded_token_request.claims)
 
@@ -140,9 +145,9 @@ class AuthnService:
     ) -> AuthorizationCodeRedirectResponse:
         form_data = f"id_token={id_token}&state={state}"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        async with HttpClient() as http_client:
+        async with HttpxClient(logger=self.logger) as http_client:
             response = await http_client.post(direct_post_uri, form_data, headers)
-        if response.status != 302:
+        if response.status_code != 302:
             raise InvalidResponseStatusError("Invalid response status")
         location = response.headers["Location"]
         query_params = parse_query_string_parameters_from_url(location)
@@ -191,23 +196,23 @@ class AuthnService:
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
         form_data = f"grant_type={grant_type}&client_id={client_id}&code={code}&client_assertion_type={client_assertion_type}&client_assertion={client_assertion}"
-        async with HttpClient() as http_client:
+        async with HttpxClient(logger=self.logger) as http_client:
             response = await http_client.post(token_uri, form_data, headers)
-        if response.status != 200:
+        if response.status_code != 200:
             raise InvalidResponseStatusError("Invalid response status")
-        token_dict = await response.json()
+        token_dict = response.json()
         return TokenResponse(**token_dict)
 
     async def get_presentation_definition(self, scope: str) -> PresentationDefinition:
         assert (
-            self.presentation_definition_endpoint
+            self.presentation_definition_endpoint is not None
         ), "Presentation definition endpoint is not set"
         url = f"{self.presentation_definition_endpoint}?scope={scope}"
-        async with HttpClient() as http_client:
+        async with HttpxClient(logger=self.logger) as http_client:
             response = await http_client.get(url)
-        if response.status != 200:
+        if response.status_code != 200:
             raise InvalidResponseStatusError("Invalid response status")
-        presentation_definition_dict = await response.json()
+        presentation_definition_dict = response.json()
         return PresentationDefinition.from_dict(presentation_definition_dict)
 
     @staticmethod
@@ -319,12 +324,40 @@ class AuthnService:
         vp_token: str,
         presentation_submission: str,
     ) -> TokenResponse:
-        assert self.token_endpoint, "Token endpoint is not set"
+        assert self.token_endpoint is not None, "Token endpoint is not set"
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
         data = f"grant_type={grant_type}&scope={scope}&vp_token={vp_token}&presentation_submission={presentation_submission}"
-        async with HttpClient() as http_client:
+        async with HttpxClient(logger=self.logger) as http_client:
             response = await http_client.post(self.token_endpoint, data, headers)
-        if response.status != 200:
+        if response.status_code != 200:
             raise InvalidResponseStatusError("Invalid response status")
-        token_dict = await response.json()
+        token_dict = response.json()
         return TokenResponse(**token_dict)
+
+    async def send_vp_token_to_direct_post(
+        self,
+        vp_token: str,
+        presentation_submission: str,
+        state: str,
+    ) -> AuthorizationCodeRedirectResponse:
+        assert self.direct_post_endpoint is not None, "Direct post endpoint is not set"
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        data = f"vp_token={vp_token}&presentation_submission={presentation_submission}&state={state}"
+        async with HttpxClient(logger=self.logger) as http_client:
+            response = await http_client.post(self.direct_post_endpoint, data, headers)
+        if response.status_code != 302:
+            raise InvalidResponseStatusError("Invalid response status")
+
+        location = response.headers["Location"]
+        query_params = parse_query_string_parameters_from_url(location)
+
+        error = query_params.get("error")
+        if error:
+            error_description = query_params.get("error_description")[0]
+            raise SendVPTokenResponseError(
+                f"Error occured during send vp token response: {error_description}"
+            )
+
+        return AuthorizationCodeRedirectResponse(
+            redirect_uri=location, code=query_params.get("code")[0]
+        )

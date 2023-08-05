@@ -8,9 +8,15 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from eudi_wallet.ebsi.event_handlers.application.legal_entity import (
+    handle_event_onboard_root_trusted_accreditation_organisation,
+    handle_event_onboard_trusted_accreditation_organisation,
     handle_event_onboard_trusted_issuer,
 )
-from eudi_wallet.ebsi.events.application.legal_entity import OnboardTrustedIssuerEvent
+from eudi_wallet.ebsi.events.application.legal_entity import (
+    OnboardRootTrustedAccreditationOrganisationEvent,
+    OnboardTrustedAccreditationOrganisationEvent,
+    OnboardTrustedIssuerEvent,
+)
 from eudi_wallet.ebsi.events.event_types import EventTypes
 from eudi_wallet.ebsi.events.wrapper import EventWrapper
 
@@ -50,6 +56,23 @@ async def consume(kafka_broker_address, kafka_topic):
             if event_type == EventTypes.OnboardTrustedIssuer.value:
                 event = OnboardTrustedIssuerEvent.from_dict(event_wrapper.payload)
                 await handle_event_onboard_trusted_issuer(event, logger, db_session)
+            elif event_type == EventTypes.OnboardTrustedAccreditationOrganisation.value:
+                event = OnboardTrustedAccreditationOrganisationEvent.from_dict(
+                    event_wrapper.payload
+                )
+                await handle_event_onboard_trusted_accreditation_organisation(
+                    event, logger, db_session
+                )
+            elif (
+                event_type
+                == EventTypes.OnboardRootTrustedAccreditationOrganisation.value
+            ):
+                event = OnboardRootTrustedAccreditationOrganisationEvent.from_dict(
+                    event_wrapper.payload
+                )
+                await handle_event_onboard_root_trusted_accreditation_organisation(
+                    event, logger, db_session
+                )
     finally:
         # Will leave consumer group; perform autocommit if enabled.
         await consumer.stop()
