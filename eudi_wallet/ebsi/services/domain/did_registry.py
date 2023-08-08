@@ -6,7 +6,6 @@ from eudi_wallet.ebsi.exceptions.domain.did_registry import (
     AddVerificationRelationshipError,
     InsertDIDDocumentError,
 )
-from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.utils.httpx_client import HttpxClient
 from eudi_wallet.ebsi.value_objects.domain.did_registry import (
     AddVerificationMethodJSONRPC20RequestBody,

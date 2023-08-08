@@ -10,15 +10,7 @@ from eth_account import Account
 from eth_account.signers.local import LocalAccount
 from jwcrypto import jwk
 
-from eudi_wallet.ebsi.entities.application.credential_offer import CredentialOfferEntity
-from eudi_wallet.ebsi.entities.application.credential_revocation_status_list import (
-    CredentialRevocationStatusListEntity,
-)
-from eudi_wallet.ebsi.entities.application.credential_schema import (
-    CredentialSchemaEntity,
-)
-from eudi_wallet.ebsi.entities.application.legal_entity import LegalEntityEntity
-from eudi_wallet.ebsi.exceptions.application.legal_entity import (
+from eudi_wallet.ebsi.exceptions.application.organisation import (
     ClientIdRequiredError,
     CreateCredentialOfferError,
     CredentialOfferIsPreAuthorizedError,
@@ -45,22 +37,26 @@ from eudi_wallet.ebsi.exceptions.domain.issuer import (
     CredentialPendingError,
     CredentialRevocationStatusListNotFoundError,
 )
-from eudi_wallet.ebsi.repositories.application.credential_offer import (
+from eudi_wallet.ebsi.models.credential_offer import CredentialOfferEntity
+from eudi_wallet.ebsi.models.credential_revocation_status_list import (
+    CredentialRevocationStatusListEntity,
+)
+from eudi_wallet.ebsi.models.credential_schema import CredentialSchemaEntity
+from eudi_wallet.ebsi.models.organisation import OrganisationModel
+from eudi_wallet.ebsi.repositories.credential_offer import (
     SqlAlchemyCredentialOfferRepository,
 )
-from eudi_wallet.ebsi.repositories.application.credential_revocation_status_list import (
+from eudi_wallet.ebsi.repositories.credential_revocation_status_list import (
     SqlAlchemyCredentialRevocationStatusListRepository,
 )
-from eudi_wallet.ebsi.repositories.application.credential_schema import (
+from eudi_wallet.ebsi.repositories.credential_schema import (
     SqlAlchemyCredentialSchemaRepository,
 )
-from eudi_wallet.ebsi.repositories.application.legal_entity import (
-    SqlAlchemyLegalRepository,
-)
-from eudi_wallet.ebsi.services.domain.authn import AuthnService
+from eudi_wallet.ebsi.repositories.organisation import SqlAlchemyOrganisationRepository
 from eudi_wallet.ebsi.services.domain.authn_request_builder import (
     AuthorizationRequestBuilder,
 )
+from eudi_wallet.ebsi.services.domain.authorisation import AuthorisationService
 from eudi_wallet.ebsi.services.domain.did_registry import DIDRegistryService
 from eudi_wallet.ebsi.services.domain.issuer import IssuerService
 from eudi_wallet.ebsi.services.domain.ledger import LedgerService
@@ -80,7 +76,7 @@ from eudi_wallet.ebsi.utils.hex import (
     generate_random_ebsi_reserved_attribute_id,
 )
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
-from eudi_wallet.ebsi.value_objects.application.legal_entity import LegalEntityRoles
+from eudi_wallet.ebsi.value_objects.application.organisation import LegalEntityRoles
 from eudi_wallet.ebsi.value_objects.domain.authn import (
     AuthorisationGrants,
     CreateIDTokenResponse,
@@ -133,7 +129,7 @@ from eudi_wallet.ebsi.value_objects.domain.trusted_issuer_registry import (
 )
 
 
-class LegalEntityService:
+class OrganisationService:
     def __init__(
         self,
         credential_issuer_configuration: Optional[OpenIDCredentialIssuerConfig] = None,
@@ -141,7 +137,7 @@ class LegalEntityService:
         logger: Optional[Logger] = None,
         issuer_domain: Optional[str] = None,
         auth_domain: Optional[str] = None,
-        legal_entity_repository: Optional[SqlAlchemyLegalRepository] = None,
+        legal_entity_repository: Optional[SqlAlchemyOrganisationRepository] = None,
         credential_schema_repository: Optional[
             SqlAlchemyCredentialSchemaRepository
         ] = None,
@@ -177,7 +173,7 @@ class LegalEntityService:
 
     async def set_entity(
         self,
-        legal_entity_entity: Optional[LegalEntityEntity] = None,
+        legal_entity_entity: Optional[OrganisationModel] = None,
     ) -> None:
         self.legal_entity_entity = legal_entity_entity
 
@@ -188,7 +184,7 @@ class LegalEntityService:
         is_onboarding_as_ti_in_progress: Optional[bool] = None,
         is_onboarding_as_tao_in_progress: Optional[bool] = None,
         is_onboarding_as_root_tao_in_progress: Optional[bool] = None,
-    ) -> LegalEntityEntity:
+    ) -> OrganisationModel:
         with self.legal_entity_repository as repo:
             if is_onboarding_as_ti_in_progress is not None:
                 return repo.create(
@@ -215,7 +211,7 @@ class LegalEntityService:
 
     async def get_access_token_for_ebsi_services(
         self,
-        ebsi_auth_client: AuthnService,
+        ebsi_auth_client: AuthorisationService,
         verifiableCredential: List[str],
         scope: str,
         key: jwk.JWK,
@@ -740,7 +736,7 @@ class LegalEntityService:
     async def get_legal_entity_onboarding_credential(
         self,
         credential_types: List[str],
-        auth_mock_client: AuthnService,
+        auth_mock_client: AuthorisationService,
         iss_mock_client: IssuerService,
     ) -> CredentialResponse:
         auth_req_builder = AuthorizationRequestBuilder(
@@ -835,7 +831,7 @@ class LegalEntityService:
                 id_token_request_decoded.claims
             )
 
-            auth_mock_client = AuthnService(
+            auth_mock_client = AuthorisationService(
                 direct_post_endpoint=id_token_request.redirect_uri,
                 logger=self.logger,
             )
@@ -927,7 +923,7 @@ class LegalEntityService:
         return credential
 
     async def fill_did_registry(self, role: LegalEntityRoles):
-        auth_mock_client = AuthnService(
+        auth_mock_client = AuthorisationService(
             authorization_endpoint=self.auth_server_configuration.authorization_endpoint,
             logger=self.logger,
         )
@@ -935,7 +931,7 @@ class LegalEntityService:
             self.credential_issuer_configuration.credential_endpoint,
             logger=self.logger,
         )
-        ebsi_auth_client = AuthnService(
+        ebsi_auth_client = AuthorisationService(
             presentation_definition_endpoint="https://api-conformance.ebsi.eu/authorisation/v3/presentation-definitions",
             token_endpoint="https://api-conformance.ebsi.eu/authorisation/v3/token",
             logger=self.logger,
@@ -1025,7 +1021,7 @@ class LegalEntityService:
             )
 
     async def fill_trusted_issuer_registry(self, role: LegalEntityRoles):
-        auth_mock_client = AuthnService(
+        auth_mock_client = AuthorisationService(
             authorization_endpoint=self.auth_server_configuration.authorization_endpoint,
             logger=self.logger,
         )
@@ -1033,7 +1029,7 @@ class LegalEntityService:
             self.credential_issuer_configuration.credential_endpoint,
             logger=self.logger,
         )
-        ebsi_auth_client = AuthnService(
+        ebsi_auth_client = AuthorisationService(
             presentation_definition_endpoint="https://api-conformance.ebsi.eu/authorisation/v3/presentation-definitions",
             token_endpoint="https://api-conformance.ebsi.eu/authorisation/v3/token",
             logger=self.logger,
@@ -1179,7 +1175,7 @@ class LegalEntityService:
                     )
 
     async def request_verifiable_authorisation_for_trust_chain(self):
-        auth_mock_client = AuthnService(
+        auth_mock_client = AuthorisationService(
             authorization_endpoint=self.auth_server_configuration.authorization_endpoint,
             logger=self.logger,
         )
@@ -1189,7 +1185,7 @@ class LegalEntityService:
             logger=self.logger,
         )
 
-        ebsi_auth_client = AuthnService(
+        ebsi_auth_client = AuthorisationService(
             presentation_definition_endpoint="https://api-conformance.ebsi.eu/authorisation/v3/presentation-definitions",
             token_endpoint="https://api-conformance.ebsi.eu/authorisation/v3/token",
             logger=self.logger,
@@ -1420,7 +1416,7 @@ class LegalEntityService:
         # Insert the DID of the client to Trusted Issuers Registry (TIR)
         # This should done using producer-consumer pattern using Kafka.
         # As temporary hack for EBSI, we will do the insertIssuer rpc method in a blocking manner.
-        ebsi_auth_client = AuthnService(
+        ebsi_auth_client = AuthorisationService(
             presentation_definition_endpoint="https://api-conformance.ebsi.eu/authorisation/v3/presentation-definitions",
             token_endpoint="https://api-conformance.ebsi.eu/authorisation/v3/token",
             logger=self.logger,
@@ -1501,7 +1497,7 @@ class LegalEntityService:
                 credential_offer_entity.credential_schema
             )
 
-            AuthnService.verify_access_token(
+            AuthorisationService.verify_access_token(
                 token=access_token,
                 aud=self.key_did.did,
                 sub=credential_offer_entity.client_id,
@@ -1901,7 +1897,7 @@ class LegalEntityService:
         return credential_response.to_dict()
 
     async def revoke_verifiable_accreditation(self, attribute_id: str, did: str):
-        ebsi_auth_client = AuthnService(
+        ebsi_auth_client = AuthorisationService(
             presentation_definition_endpoint="https://api-conformance.ebsi.eu/authorisation/v3/presentation-definitions",
             token_endpoint="https://api-conformance.ebsi.eu/authorisation/v3/token",
             logger=self.logger,
@@ -2365,7 +2361,7 @@ class LegalEntityService:
 
         return redirection_url
 
-    async def get_first_legal_entity(self) -> Union[LegalEntityEntity, None]:
+    async def get_first_legal_entity(self) -> Union[OrganisationModel, None]:
         assert (
             self.legal_entity_repository is not None
         ), "Legal entity repository not found"
@@ -2763,7 +2759,7 @@ class LegalEntityService:
             exp = iat + 86400
             nonce = str(uuid.uuid4())
 
-            access_token = AuthnService.create_access_token(
+            access_token = AuthorisationService.create_access_token(
                 iss=self.key_did.did,
                 aud=self.key_did.did,
                 sub=client_id,

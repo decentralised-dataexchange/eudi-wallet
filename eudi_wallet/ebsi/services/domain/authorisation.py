@@ -34,7 +34,7 @@ from eudi_wallet.ebsi.value_objects.domain.authn import (
 from eudi_wallet.util import parse_query_string_parameters_from_url
 
 
-class AuthnService:
+class AuthorisationService:
     def __init__(
         self,
         authorization_endpoint: typing.Optional[str] = None,

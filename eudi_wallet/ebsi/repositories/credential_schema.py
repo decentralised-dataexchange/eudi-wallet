@@ -5,9 +5,7 @@ from typing import List, Union
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
-from eudi_wallet.ebsi.entities.application.credential_schema import (
-    CredentialSchemaEntity,
-)
+from eudi_wallet.ebsi.models.credential_schema import CredentialSchemaEntity
 
 
 class SqlAlchemyCredentialSchemaRepository:

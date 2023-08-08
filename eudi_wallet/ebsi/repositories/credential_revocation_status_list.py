@@ -5,7 +5,7 @@ from typing import Optional, Union
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
-from eudi_wallet.ebsi.entities.application.credential_revocation_status_list import (
+from eudi_wallet.ebsi.models.credential_revocation_status_list import (
     CredentialRevocationStatusListEntity,
 )
 from eudi_wallet.ebsi.services.domain.utils.credential import (

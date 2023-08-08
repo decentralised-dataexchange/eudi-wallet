@@ -1,7 +1,6 @@
 from logging import Logger
 from typing import Optional
 
-from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.utils.httpx_client import HttpxClient
 from eudi_wallet.ebsi.value_objects.domain.discovery import (
     OpenIDAuthServerConfig,

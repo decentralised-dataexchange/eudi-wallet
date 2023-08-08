@@ -8,7 +8,6 @@ from eudi_wallet.ebsi.exceptions.domain.trusted_issuer_registry import (
     ListIssuerProxiesError,
     SetAttributeDataError,
 )
-from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.utils.httpx_client import HttpxClient
 from eudi_wallet.ebsi.value_objects.domain.trusted_issuer_registry import (
     AddIssuerProxyJSONRPC20RequestBody,

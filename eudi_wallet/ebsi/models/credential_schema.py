@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, String, Text
 from sqlalchemy.orm import relationship
 
-from eudi_wallet.ebsi.entities.base import Base
+from eudi_wallet.ebsi.models.base import Base
 
 
 class CredentialSchemaEntity(Base):
@@ -26,7 +26,7 @@ class CredentialSchemaEntity(Base):
     credential_offer_entities = relationship(
         "CredentialOfferEntity", back_populates="credential_schema", cascade="all,delete-orphan"
     )
-    legal_entity = relationship("LegalEntityEntity", back_populates="credential_schemas")
+    legal_entity = relationship("OrganisationModel", back_populates="credential_schemas")
 
     credential_types = Column(String, nullable=False)
 

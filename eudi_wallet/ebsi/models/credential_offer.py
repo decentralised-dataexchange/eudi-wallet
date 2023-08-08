@@ -5,7 +5,7 @@ import uuid
 from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
 
-from eudi_wallet.ebsi.entities.base import Base
+from eudi_wallet.ebsi.models.base import Base
 
 
 class CredentialOfferEntity(Base):

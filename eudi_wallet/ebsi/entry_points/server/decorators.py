@@ -5,26 +5,24 @@ from typing import Optional
 from aiohttp import web
 
 from eudi_wallet.ebsi.entry_points.server.utils import AppContext, get_app_context
-from eudi_wallet.ebsi.repositories.application.credential_offer import (
+from eudi_wallet.ebsi.repositories.credential_offer import (
     SqlAlchemyCredentialOfferRepository,
 )
-from eudi_wallet.ebsi.repositories.application.credential_revocation_status_list import (
+from eudi_wallet.ebsi.repositories.credential_revocation_status_list import (
     SqlAlchemyCredentialRevocationStatusListRepository,
 )
-from eudi_wallet.ebsi.repositories.application.credential_schema import (
+from eudi_wallet.ebsi.repositories.credential_schema import (
     SqlAlchemyCredentialSchemaRepository,
 )
-from eudi_wallet.ebsi.repositories.application.legal_entity import (
-    SqlAlchemyLegalRepository,
-)
-from eudi_wallet.ebsi.services.application.legal_entity import LegalEntityService
+from eudi_wallet.ebsi.repositories.organisation import SqlAlchemyOrganisationRepository
+from eudi_wallet.ebsi.services.application.organisation import OrganisationService
 
 
-async def get_legal_entity_service(app_context: AppContext) -> LegalEntityService:
+async def get_legal_entity_service(app_context: AppContext) -> OrganisationService:
     credential_schema_repository = SqlAlchemyCredentialSchemaRepository(
         session=app_context.db_session, logger=app_context.logger
     )
-    legal_entity_repository = SqlAlchemyLegalRepository(
+    legal_entity_repository = SqlAlchemyOrganisationRepository(
         session=app_context.db_session, logger=app_context.logger
     )
     credential_offer_repository = SqlAlchemyCredentialOfferRepository(
@@ -35,7 +33,7 @@ async def get_legal_entity_service(app_context: AppContext) -> LegalEntityServic
             session=app_context.db_session, logger=app_context.logger
         )
     )
-    legal_entity_service = LegalEntityService(
+    legal_entity_service = OrganisationService(
         credential_issuer_configuration=app_context.credential_issuer_configuration,
         auth_server_configuration=app_context.auth_server_configuration,
         logger=app_context.logger,
@@ -53,7 +51,7 @@ async def get_legal_entity_service(app_context: AppContext) -> LegalEntityServic
 @dataclasses.dataclass
 class RequestContext:
     app_context: AppContext
-    legal_entity_service: Optional[LegalEntityService] = None
+    legal_entity_service: Optional[OrganisationService] = None
 
 
 def inject_request_context(raise_exception_if_legal_entity_not_found: bool = True):

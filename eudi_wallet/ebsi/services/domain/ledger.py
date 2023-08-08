@@ -6,7 +6,6 @@ from eth_account.datastructures import SignedTransaction
 from web3.auto import w3
 
 from eudi_wallet.ebsi.exceptions.domain.ledger import SendSignedTransactionError
-from eudi_wallet.ebsi.utils.http_client import HttpClient
 from eudi_wallet.ebsi.utils.httpx_client import HttpxClient
 from eudi_wallet.ebsi.value_objects.domain.ledger import (
     GetTransactionReceiptJSONRPC20RequestBody,

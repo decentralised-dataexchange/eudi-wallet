@@ -17,14 +17,14 @@ from eudi_wallet.ebsi.entry_points.server.well_known import (
     get_well_known_authn_openid_config,
     get_well_known_openid_credential_issuer_config,
 )
-from eudi_wallet.ebsi.events.application.legal_entity import (
+from eudi_wallet.ebsi.events.application.organisation import (
     OnboardRootTrustedAccreditationOrganisationEvent,
     OnboardTrustedAccreditationOrganisationEvent,
     OnboardTrustedIssuerEvent,
 )
 from eudi_wallet.ebsi.events.event_types import EventTypes
 from eudi_wallet.ebsi.events.wrapper import EventWrapper
-from eudi_wallet.ebsi.exceptions.application.legal_entity import (
+from eudi_wallet.ebsi.exceptions.application.organisation import (
     ClientIdRequiredError,
     CreateAccessTokenError,
     CreateCredentialOfferError,
@@ -45,7 +45,7 @@ from eudi_wallet.ebsi.exceptions.domain.issuer import (
 )
 from eudi_wallet.ebsi.services.domain.utils.did import generate_and_store_did
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
-from eudi_wallet.ebsi.value_objects.application.legal_entity import LegalEntityRoles
+from eudi_wallet.ebsi.value_objects.application.organisation import LegalEntityRoles
 from eudi_wallet.ebsi.value_objects.domain.authn import (
     AuthorisationGrants,
     AuthorizationRequestQueryParams,

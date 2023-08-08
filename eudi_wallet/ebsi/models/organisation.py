@@ -4,10 +4,10 @@ import uuid
 from sqlalchemy import Boolean, Column, DateTime, String, Text
 from sqlalchemy.orm import relationship
 
-from eudi_wallet.ebsi.entities.base import Base
+from eudi_wallet.ebsi.models.base import Base
 
 
-class LegalEntityEntity(Base):
+class OrganisationModel(Base):
     __tablename__ = "legal_entity"
 
     id = Column(

@@ -5,10 +5,10 @@ from typing import Union
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
-from eudi_wallet.ebsi.entities.application.legal_entity import LegalEntityEntity
+from eudi_wallet.ebsi.models.organisation import OrganisationModel
 
 
-class SqlAlchemyLegalRepository:
+class SqlAlchemyOrganisationRepository:
     def __init__(self, session: Session, logger: Logger):
         self.session_factory = session
         self.logger = logger
@@ -28,19 +28,19 @@ class SqlAlchemyLegalRepository:
         self.session = None
         return True
 
-    def get_first(self) -> Union[LegalEntityEntity, None]:
+    def get_first(self) -> Union[OrganisationModel, None]:
         try:
-            legal_entity = self.session.query(LegalEntityEntity).first()
+            legal_entity = self.session.query(OrganisationModel).first()
             return legal_entity
         except Exception as e:
             print(e)
             return None
 
-    def update(self, id: str, **kwargs) -> Union[LegalEntityEntity, None]:
+    def update(self, id: str, **kwargs) -> Union[OrganisationModel, None]:
         try:
-            legal_entity: LegalEntityEntity = (
-                self.session.query(LegalEntityEntity)
-                .filter(LegalEntityEntity.id == id)
+            legal_entity: OrganisationModel = (
+                self.session.query(OrganisationModel)
+                .filter(OrganisationModel.id == id)
                 .one()
             )
 
@@ -58,8 +58,8 @@ class SqlAlchemyLegalRepository:
     def delete(self, id: str) -> bool:
         try:
             legal_entity = (
-                self.session.query(LegalEntityEntity)
-                .filter(LegalEntityEntity.id == id)
+                self.session.query(OrganisationModel)
+                .filter(OrganisationModel.id == id)
                 .one()
             )
             self.session.delete(legal_entity)
@@ -70,9 +70,9 @@ class SqlAlchemyLegalRepository:
             print(f"No legal entity found with id {id}")
             return False
 
-    def create(self, **kwargs) -> LegalEntityEntity:
+    def create(self, **kwargs) -> OrganisationModel:
         id = str(uuid.uuid4())
-        legal_entity = LegalEntityEntity(id=id, **kwargs)
+        legal_entity = OrganisationModel(id=id, **kwargs)
         self.session.add(legal_entity)
         self.session.commit()
         self.session.refresh(legal_entity)

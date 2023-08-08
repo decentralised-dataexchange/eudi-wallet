@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 import click
+import debugpy
 from aiohttp import web
 from aiohttp.web_request import Request
 from aiokafka import AIOKafkaProducer
@@ -10,13 +11,13 @@ from pyngrok import ngrok  # type: ignore
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from eudi_wallet.ebsi.entities.base import Base
 from eudi_wallet.ebsi.entry_points.server.middlewares import (
     error_middleware,
     logging_middleware,
 )
 from eudi_wallet.ebsi.entry_points.server.routes import routes
 from eudi_wallet.ebsi.entry_points.server.startup import app_startup
+from eudi_wallet.ebsi.models.base import Base
 
 
 class AppLogger:
@@ -113,6 +114,20 @@ class ServerTeardown:
     type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]),
     help="Set the log level",
 )
+@click.option("--debug", envvar="DEBUG", is_flag=True, help="Enable debugging mode")
+@click.option(
+    "--debug-host",
+    envvar="DEBUG_HOST",
+    default="0.0.0.0",
+    help="Debug host to listen on",
+)
+@click.option(
+    "--debug-port",
+    envvar="DEBUG_PORT",
+    default=5678,
+    type=int,
+    help="Debug port to listen on",
+)
 def main(
     port,
     ngrok_auth_token,
@@ -120,9 +135,20 @@ def main(
     kafka_broker_address,
     kafka_topic,
     log_level,
+    debug,
+    debug_host,
+    debug_port,
 ):
     level = getattr(logging, log_level.upper(), None)
     logger = AppLogger(__name__, level=level).logger
+
+    if debug:
+        logger.debug(f"Starting debugger on {debug_host}:{debug_port}")
+        debugpy.listen((debug_host, debug_port))
+        logger.debug("Waiting for debugger to attach...")
+        debugpy.wait_for_client()
+        logger.debug("Debugger attached!")
+
     db_session = DBSetup("sqlite:///wallet.db").setup_db()
 
     loop = asyncio.get_event_loop()
@@ -158,6 +184,7 @@ def main(
         loop.run_forever()
 
     except KeyboardInterrupt:
+        print("CTRL+C Pressed. Shutting down gracefully...")
         pass
 
     finally:

@@ -3,16 +3,17 @@ import json
 import logging
 
 import click
+import debugpy
 from aiokafka import AIOKafkaConsumer
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from eudi_wallet.ebsi.event_handlers.application.legal_entity import (
+from eudi_wallet.ebsi.event_handlers.application.organisation import (
     handle_event_onboard_root_trusted_accreditation_organisation,
     handle_event_onboard_trusted_accreditation_organisation,
     handle_event_onboard_trusted_issuer,
 )
-from eudi_wallet.ebsi.events.application.legal_entity import (
+from eudi_wallet.ebsi.events.application.organisation import (
     OnboardRootTrustedAccreditationOrganisationEvent,
     OnboardTrustedAccreditationOrganisationEvent,
     OnboardTrustedIssuerEvent,
@@ -93,7 +94,36 @@ async def consume(kafka_broker_address, kafka_topic):
     prompt="Enter your kafka topic",
     help="Topic to consume kafka events from",
 )
-def main(kafka_broker_address, kafka_topic):
+@click.option(
+    "--debug", envvar="KAFKA_CONSUMER_DEBUG", is_flag=True, help="Enable debugging mode"
+)
+@click.option(
+    "--debug-host",
+    envvar="KAFKA_CONSUMER_DEBUG_HOST",
+    default="0.0.0.0",
+    help="Debug host to listen on",
+)
+@click.option(
+    "--debug-port",
+    envvar="KAFKA_CONSUMER_DEBUG_PORT",
+    default=5678,
+    type=int,
+    help="Debug port to listen on",
+)
+def main(
+    kafka_broker_address,
+    kafka_topic,
+    debug,
+    debug_host,
+    debug_port,
+):
+    if debug:
+        logger.debug(f"Starting debugger on {debug_host}:{debug_port}")
+        debugpy.listen((debug_host, debug_port))
+        logger.debug("Waiting for debugger to attach...")
+        debugpy.wait_for_client()
+        logger.debug("Debugger attached!")
+
     loop = asyncio.get_event_loop()
 
     consume_task = loop.create_task(consume(kafka_broker_address, kafka_topic))
