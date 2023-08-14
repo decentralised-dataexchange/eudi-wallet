@@ -80,7 +80,7 @@ class CreateAuthorizationRequest(DataClassJsonMixin):
     authorize_uri: str
     redirect_uri: str
     jwks_uri: str
-    authorization_details: list[AuthorizationDetail]
+    authorization_details: List[AuthorizationDetail]
     response_type: str = "code"
     scope: str = "openid"
     nonce: str = str(uuid.uuid4())

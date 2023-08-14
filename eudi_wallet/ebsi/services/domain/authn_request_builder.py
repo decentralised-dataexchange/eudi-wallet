@@ -70,8 +70,8 @@ class AuthorizationRequestBuilder:
 
     def set_authorization_details(
         self,
-        locations: list[str],
-        types: list[str],
+        locations: typing.List[str],
+        types: typing.List[str],
         type: str = "openid_credential",
         format: str = "jwt_vc",
     ):
