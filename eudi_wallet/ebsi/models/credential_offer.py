@@ -1,34 +1,34 @@
 import datetime
-import json
 import uuid
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSON, UUID
 from sqlalchemy.orm import relationship
 
 from eudi_wallet.ebsi.models.base import Base
 
 
-class CredentialOfferEntity(Base):
+class CredentialOfferModel(Base):
     __tablename__ = "credential_offer"
 
     id = Column(
-        String(36),
+        UUID(as_uuid=True),
         primary_key=True,
-        default=lambda: str(uuid.uuid4()),
+        default=uuid.uuid4,
         unique=True,
         nullable=False,
     )
-    credential_schema_id = Column(
-        String(36),
-        ForeignKey("credential_schema.id"),
+    data_agreement_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("data_agreement.id"),
         nullable=False,
     )
-    credential_schema = relationship(
-        "CredentialSchemaEntity", back_populates="credential_offer_entities"
+    data_agreement = relationship(
+        "DataAgreementModel", back_populates="credential_offers"
     )
     is_accessed = Column(Boolean, default=False)
 
-    data_attribute_values = Column(Text, nullable=True)
+    data_attribute_values = Column(JSON, nullable=False)
 
     issuance_mode = Column(String, nullable=False)
     is_pre_authorised = Column(Boolean, default=False)
@@ -82,13 +82,13 @@ class CredentialOfferEntity(Base):
         Integer, nullable=False, default=-1
     )
     credential_revocation_status_list_id = Column(
-        String(36),
+        UUID(as_uuid=True),
         ForeignKey("credential_revocation_status_list.id"),
         nullable=True,
     )
     credential_revocation_status_list = relationship(
-        "CredentialRevocationStatusListEntity",
-        back_populates="credential_offer_entities",
+        "CredentialRevocationStatusListModel",
+        back_populates="credential_offers",
     )
 
     trust_framework = Column(String, nullable=True)
@@ -101,12 +101,9 @@ class CredentialOfferEntity(Base):
             if attr in result and isinstance(result[attr], datetime.datetime):
                 result[attr] = int(result[attr].timestamp())
 
-        # Convert data attributes values to dict from string
-        if "data_attribute_values" in result and isinstance(
-            result["data_attribute_values"], str
-        ):
-            result["data_attribute_values"] = json.loads(
-                result["data_attribute_values"]
-            )
+        # Convert UUID to string
+        for attr in ["id", "data_agreement_id", "credential_revocation_status_list_id"]:
+            if attr in result and isinstance(result[attr], uuid.UUID):
+                result[attr] = str(result[attr])
 
         return result

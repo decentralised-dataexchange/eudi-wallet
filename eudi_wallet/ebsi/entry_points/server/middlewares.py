@@ -8,6 +8,8 @@ async def logging_middleware(app, handler):
         app_context = get_app_context(app)
         logger = app_context.logger
 
+        assert logger is not None
+
         # Log the request
         logger.debug(f"Received request: {request.method} {request.path}")
 
@@ -44,6 +46,8 @@ async def error_middleware(app, handler):
     async def middleware_handler(request):
         app_context = get_app_context(app)
         logger = app_context.logger
+
+        assert logger is not None
 
         try:
             # Call the next middleware or route handler

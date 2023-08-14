@@ -2,27 +2,31 @@ import datetime
 import uuid
 
 from sqlalchemy import Boolean, Column, DateTime, String, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from eudi_wallet.ebsi.models.base import Base
 
 
 class OrganisationModel(Base):
-    __tablename__ = "legal_entity"
+    __tablename__ = "organisation"
 
     id = Column(
-        String(36),
+        UUID(as_uuid=True),
         primary_key=True,
-        default=lambda: str(uuid.uuid4()),
+        default=uuid.uuid4,
         unique=True,
         nullable=False,
     )
-    credential_schemas = relationship(
-        "CredentialSchemaEntity",
-        back_populates="legal_entity",
+    data_agreements = relationship(
+        "DataAgreementModel",
+        back_populates="organisation",
         cascade="all,delete-orphan",
     )
-    cryptographic_seed = Column(String(length=200), nullable=False)
+    name = Column(String(length=100), nullable=False)
+    description = Column(String(length=500), nullable=True)
+    logo_url = Column(Text, nullable=True)
+    cryptographic_seed = Column(String(length=500), nullable=False)
     role = Column(String(length=200), nullable=False)
 
     is_did_in_registry = Column(Boolean, default=False)
@@ -46,3 +50,18 @@ class OrganisationModel(Base):
     updated_at = Column(
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow
     )
+
+    def to_dict(self):
+        result = {c.name: getattr(self, c.name) for c in self.__table__.columns}
+
+        # Convert datetime objects to seconds since epoch (Unix timestamp)
+        for attr in ["created_at", "updated_at"]:
+            if attr in result and isinstance(result[attr], datetime.datetime):
+                result[attr] = int(result[attr].timestamp())
+
+        # Convert UUID to string
+        for attr in ["id"]:
+            if attr in result and isinstance(result[attr], uuid.UUID):
+                result[attr] = str(result[attr])
+
+        return result

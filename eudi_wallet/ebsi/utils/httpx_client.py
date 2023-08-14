@@ -12,8 +12,6 @@ from tenacity import (
     wait_fixed,
 )
 
-from eudi_wallet.ebsi.exceptions.domain.issuer import CredentialRequestError
-
 
 class HttpxClient:
     def __init__(
@@ -23,7 +21,7 @@ class HttpxClient:
         timeout: int = 10,
         logger: typing.Optional[logging.Logger] = None,
     ):
-        self.client = None
+        self.client: typing.Optional[httpx.AsyncClient] = None
         self.retry_attempts = retry_attempts
         self.retry_wait = retry_wait
         self.timeout = timeout
@@ -40,6 +38,7 @@ class HttpxClient:
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
+        assert self.client is not None
         await self.client.aclose()
         self.client = None
 
@@ -77,7 +76,7 @@ class HttpxClient:
         self,
         method: str,
         url: str,
-        condition: typing.Callable[[httpx.Response], bool],
+        condition: typing.Callable[[httpx.Response], typing.Awaitable[bool]],
         data: typing.Optional[typing.Dict] = None,
         headers: typing.Optional[typing.Dict] = None,
         n: int = 5,

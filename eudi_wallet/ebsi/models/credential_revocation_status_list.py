@@ -1,19 +1,20 @@
 import datetime
 import uuid
 
-from sqlalchemy import Column, DateTime, Integer, String, Text
+from sqlalchemy import Column, DateTime, Integer, Text
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 
 from eudi_wallet.ebsi.models.base import Base
 
 
-class CredentialRevocationStatusListEntity(Base):
+class CredentialRevocationStatusListModel(Base):
     __tablename__ = "credential_revocation_status_list"
 
     id = Column(
-        String(36),
+        UUID(as_uuid=True),
         primary_key=True,
-        default=lambda: str(uuid.uuid4()),
+        default=uuid.uuid4,
         unique=True,
         nullable=False,
     )
@@ -22,8 +23,8 @@ class CredentialRevocationStatusListEntity(Base):
 
     # Cascading on delete is not required as credential offer can
     # exist without a credential revocation status list
-    credential_offer_entities = relationship(
-        "CredentialOfferEntity", back_populates="credential_revocation_status_list"
+    credential_offers = relationship(
+        "CredentialOfferModel", back_populates="credential_revocation_status_list"
     )
 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
@@ -38,5 +39,10 @@ class CredentialRevocationStatusListEntity(Base):
         for attr in ["created_at", "updated_at"]:
             if attr in result and isinstance(result[attr], datetime.datetime):
                 result[attr] = int(result[attr].timestamp())
+
+        # Convert UUID to string
+        for attr in ["id", "organisation_id"]:
+            if attr in result and isinstance(result[attr], uuid.UUID):
+                result[attr] = str(result[attr])
 
         return result

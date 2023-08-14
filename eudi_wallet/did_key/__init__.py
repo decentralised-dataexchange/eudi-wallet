@@ -100,7 +100,7 @@ class KeyDid:
         header = {
             "typ": "JWT",
             "alg": "ES256",
-            "kid": f"{did or self._did}#{self._key.key_id}",
+            "kid": f"{did or self._did}#{self._key.key_id if did else self._method_specific_id}",
         }
         payload = {
             "iss": did or self._did,
@@ -120,7 +120,7 @@ class KeyDid:
         header = {
             "typ": "openid4vci-proof+jwt",
             "alg": "ES256",
-            "kid": f"{did or self._did}#{self._key.key_id}",
+            "kid": f"{did or self._did}#{self._key.key_id if did else self._method_specific_id}",
         }
         payload = {
             "iss": self._did,

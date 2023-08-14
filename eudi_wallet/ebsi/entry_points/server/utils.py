@@ -20,8 +20,8 @@ class AppContext:
     logger: typing.Optional[Logger] = None
     kafka_producer: typing.Optional[AIOKafkaProducer] = None
     kafka_topic: typing.Optional[str] = None
-    db_session: typing.Optional[Session] = None
-    domain: str = None
+    db_session: typing.Optional[typing.Callable] = None
+    domain: typing.Optional[str] = None
 
 
 def get_app_context(app) -> AppContext:

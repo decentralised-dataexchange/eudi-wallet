@@ -1,12 +1,12 @@
-import uuid
 from logging import Logger
-from typing import Optional, Union
+from typing import Callable, Optional, Union
+import uuid
 
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
 
 from eudi_wallet.ebsi.models.credential_revocation_status_list import (
-    CredentialRevocationStatusListEntity,
+    CredentialRevocationStatusListModel,
 )
 from eudi_wallet.ebsi.services.domain.utils.credential import (
     CredentialStatus,
@@ -15,16 +15,19 @@ from eudi_wallet.ebsi.services.domain.utils.credential import (
 
 
 class SqlAlchemyCredentialRevocationStatusListRepository:
-    def __init__(self, session: Session, logger: Logger):
+    def __init__(self, session: Optional[Callable], logger: Optional[Logger]):
         self.session_factory = session
         self.logger = logger
         self.session = None
 
     def __enter__(self):
+        assert self.session_factory is not None
         self.session = self.session_factory()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        assert self.session is not None
+        assert self.logger is not None
         if exc_tb is not None:
             self.session.rollback()
             self.logger.error(f"Exception occurred: {exc_type}, {exc_val}")
@@ -39,9 +42,10 @@ class SqlAlchemyCredentialRevocationStatusListRepository:
         encoded_status_list: str,
         last_assigned_index: Optional[int] = None,
         **kwargs,
-    ) -> CredentialRevocationStatusListEntity:
+    ) -> CredentialRevocationStatusListModel:
+        assert self.session is not None
         id = str(uuid.uuid4())
-        credential_revocation_status_list_entity = CredentialRevocationStatusListEntity(
+        credential_revocation_status_list_entity = CredentialRevocationStatusListModel(
             id=id,
             encoded_status_list=encoded_status_list,
             last_assigned_index=last_assigned_index,
@@ -54,16 +58,18 @@ class SqlAlchemyCredentialRevocationStatusListRepository:
 
     def reserve_revocation_index(
         self,
-    ) -> CredentialRevocationStatusListEntity:
-        revocation_list: CredentialRevocationStatusListEntity = (
-            self.session.query(CredentialRevocationStatusListEntity)
-            .order_by(CredentialRevocationStatusListEntity.created_at.desc())
-            .filter(CredentialRevocationStatusListEntity.last_assigned_index < 131071)
+    ) -> CredentialRevocationStatusListModel:
+        assert self.session is not None
+        assert self.logger is not None
+        revocation_list: CredentialRevocationStatusListModel = (
+            self.session.query(CredentialRevocationStatusListModel)
+            .order_by(CredentialRevocationStatusListModel.created_at.desc())
+            .filter(CredentialRevocationStatusListModel.last_assigned_index < 131071)
             .with_for_update()
             .first()
         )
         if revocation_list:
-            revocation_list.last_assigned_index += 1
+            revocation_list.last_assigned_index += 1 # type: ignore
         else:
             self.logger.debug(
                 "No credential revocation status list found with last assigned index < 131071; Creating new list"
@@ -74,7 +80,7 @@ class SqlAlchemyCredentialRevocationStatusListRepository:
                     CredentialStatus(status_list_index=0, is_revoked=False)
                 ]
             )
-            revocation_list = CredentialRevocationStatusListEntity(
+            revocation_list = CredentialRevocationStatusListModel(
                 id=id,
                 encoded_status_list=encoded_status_list,
                 last_assigned_index=0,
@@ -86,11 +92,13 @@ class SqlAlchemyCredentialRevocationStatusListRepository:
 
         return revocation_list
 
-    def get_by_id(self, id: str) -> Union[CredentialRevocationStatusListEntity, None]:
+    def get_by_id(self, id: str) -> Union[CredentialRevocationStatusListModel, None]:
+        assert self.session is not None
+        assert self.logger is not None
         try:
             return (
-                self.session.query(CredentialRevocationStatusListEntity)
-                .filter(CredentialRevocationStatusListEntity.id == id)
+                self.session.query(CredentialRevocationStatusListModel)
+                .filter(CredentialRevocationStatusListModel.id == id)
                 .one()
             )
         except exc.NoResultFound:
@@ -101,11 +109,13 @@ class SqlAlchemyCredentialRevocationStatusListRepository:
 
     def update(
         self, id: str, **kwargs
-    ) -> Union[CredentialRevocationStatusListEntity, None]:
+    ) -> Union[CredentialRevocationStatusListModel, None]:
+        assert self.session is not None
+        assert self.logger is not None
         try:
-            credential_revocation_status_list_entity: CredentialRevocationStatusListEntity = (
-                self.session.query(CredentialRevocationStatusListEntity)
-                .filter(CredentialRevocationStatusListEntity.id == id)
+            credential_revocation_status_list_entity: CredentialRevocationStatusListModel = (
+                self.session.query(CredentialRevocationStatusListModel)
+                .filter(CredentialRevocationStatusListModel.id == id)
                 .one()
             )
 

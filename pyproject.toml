@@ -30,6 +30,9 @@ pydantic = "^2.1.1"
 aiokafka = "^0.8.1"
 tenacity = "^8.2.2"
 httpx = "^0.24.1"
+mnemonic = "^0.20"
+psycopg2-binary = "^2.9.7"
+jsonpath-ng = "^1.5.3"
 
 [tool.poetry.dev-dependencies]
 jupyter = "^1.0.0"
@@ -48,8 +51,8 @@ start-consumer = 'eudi_wallet.ebsi.entry_points.kafka.consumer:main'
 requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.mypy]
-disable_error_code = ["return"]
-
 [tool.isort]
 profile = "black"
+
+[tool.pyright.report]
+"reportCallExpressionNotUsedInTypeExpression" = false

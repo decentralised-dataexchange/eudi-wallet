@@ -37,11 +37,11 @@ from eudi_wallet.ebsi.exceptions.domain.issuer import (
     CredentialPendingError,
     CredentialRevocationStatusListNotFoundError,
 )
-from eudi_wallet.ebsi.models.credential_offer import CredentialOfferEntity
+from eudi_wallet.ebsi.models.credential_offer import CredentialOfferModel
 from eudi_wallet.ebsi.models.credential_revocation_status_list import (
-    CredentialRevocationStatusListEntity,
+    CredentialRevocationStatusListModel,
 )
-from eudi_wallet.ebsi.models.credential_schema import CredentialSchemaEntity
+from eudi_wallet.ebsi.models.data_agreement import DataAgreementModel
 from eudi_wallet.ebsi.models.organisation import OrganisationModel
 from eudi_wallet.ebsi.repositories.credential_offer import (
     SqlAlchemyCredentialOfferRepository,
@@ -49,8 +49,8 @@ from eudi_wallet.ebsi.repositories.credential_offer import (
 from eudi_wallet.ebsi.repositories.credential_revocation_status_list import (
     SqlAlchemyCredentialRevocationStatusListRepository,
 )
-from eudi_wallet.ebsi.repositories.credential_schema import (
-    SqlAlchemyCredentialSchemaRepository,
+from eudi_wallet.ebsi.repositories.data_agreement import (
+    SqlAlchemyDataAgreementRepository,
 )
 from eudi_wallet.ebsi.repositories.organisation import SqlAlchemyOrganisationRepository
 from eudi_wallet.ebsi.services.domain.authn_request_builder import (
@@ -76,7 +76,7 @@ from eudi_wallet.ebsi.utils.hex import (
     generate_random_ebsi_reserved_attribute_id,
 )
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
-from eudi_wallet.ebsi.value_objects.application.organisation import LegalEntityRoles
+from eudi_wallet.ebsi.value_objects.application.organisation import OrganisationRoles
 from eudi_wallet.ebsi.value_objects.domain.authn import (
     AuthorisationGrants,
     CreateIDTokenResponse,
@@ -139,7 +139,7 @@ class OrganisationService:
         auth_domain: Optional[str] = None,
         legal_entity_repository: Optional[SqlAlchemyOrganisationRepository] = None,
         credential_schema_repository: Optional[
-            SqlAlchemyCredentialSchemaRepository
+            SqlAlchemyDataAgreementRepository
         ] = None,
         credential_offer_repository: Optional[
             SqlAlchemyCredentialOfferRepository
@@ -188,26 +188,29 @@ class OrganisationService:
         with self.legal_entity_repository as repo:
             if is_onboarding_as_ti_in_progress is not None:
                 return repo.create(
+                    name="iGrant.io",
                     cryptographic_seed=cryptographic_seed,
                     is_onboarding_as_ti_in_progress=is_onboarding_as_ti_in_progress,
                     role=role,
                 )
             elif is_onboarding_as_tao_in_progress is not None:
                 return repo.create(
+                    name="iGrant.io",
                     cryptographic_seed=cryptographic_seed,
                     is_onboarding_as_tao_in_progress=is_onboarding_as_tao_in_progress,
                     role=role,
                 )
             elif is_onboarding_as_root_tao_in_progress is not None:
                 return repo.create(
+                    name="iGrant.io",
                     cryptographic_seed=cryptographic_seed,
                     is_onboarding_as_root_tao_in_progress=is_onboarding_as_root_tao_in_progress,
                     role=role,
                 )
 
-    async def update_legal_entity(self, legal_entity_id: str, **kwargs):
+    async def update_legal_entity(self, organisation_id: str, **kwargs):
         with self.legal_entity_repository as repo:
-            return repo.update(legal_entity_id, **kwargs)
+            return repo.update(organisation_id, **kwargs)
 
     async def get_access_token_for_ebsi_services(
         self,
@@ -922,7 +925,7 @@ class OrganisationService:
 
         return credential
 
-    async def fill_did_registry(self, role: LegalEntityRoles):
+    async def fill_did_registry(self, role: OrganisationRoles):
         auth_mock_client = AuthorisationService(
             authorization_endpoint=self.auth_server_configuration.authorization_endpoint,
             logger=self.logger,
@@ -1020,7 +1023,7 @@ class OrganisationService:
                 is_did_in_registry=True,
             )
 
-    async def fill_trusted_issuer_registry(self, role: LegalEntityRoles):
+    async def fill_trusted_issuer_registry(self, role: OrganisationRoles):
         auth_mock_client = AuthorisationService(
             authorization_endpoint=self.auth_server_configuration.authorization_endpoint,
             logger=self.logger,
@@ -1045,13 +1048,13 @@ class OrganisationService:
             logger=self.logger,
         )
 
-        if role == LegalEntityRoles.TrustedIssuer:
+        if role == OrganisationRoles.TrustedIssuer:
             credential_types = [
                 CredentialTypes.VerifiableCredential.value,
                 CredentialTypes.VerifiableAttestation.value,
                 CredentialTypes.VerifiableAccreditationToAttest.value,
             ]
-        elif role == LegalEntityRoles.TrustedAccreditationOrganisation:
+        elif role == OrganisationRoles.TrustedAccreditationOrganisation:
             credential_types = [
                 CredentialTypes.VerifiableCredential.value,
                 CredentialTypes.VerifiableAttestation.value,
@@ -1121,7 +1124,7 @@ class OrganisationService:
             eth_account_address=account_address,
         )
 
-        if role == LegalEntityRoles.TrustedIssuer:
+        if role == OrganisationRoles.TrustedIssuer:
             with self.legal_entity_repository as repo:
                 # Save onboarding credential and status to repository
                 self.legal_entity_entity = repo.update(
@@ -1130,7 +1133,7 @@ class OrganisationService:
                     is_onboarding_as_ti_in_progress=False,
                     is_onboarded_as_ti=True,
                 )
-        elif role == LegalEntityRoles.TrustedAccreditationOrganisation:
+        elif role == OrganisationRoles.TrustedAccreditationOrganisation:
             with self.legal_entity_repository as repo:
                 # Save onboarding credential and status to repository
                 self.legal_entity_entity = repo.update(
@@ -1145,12 +1148,12 @@ class OrganisationService:
 
         try:
             if not self.legal_entity_entity.is_did_in_registry:
-                await self.fill_did_registry(role=LegalEntityRoles.TrustedIssuer)
+                await self.fill_did_registry(role=OrganisationRoles.TrustedIssuer)
             else:
                 self.logger.debug("Already in DID registry")
             if not self.legal_entity_entity.is_onboarded_as_ti:
                 await self.fill_trusted_issuer_registry(
-                    role=LegalEntityRoles.TrustedIssuer
+                    role=OrganisationRoles.TrustedIssuer
                 )
             else:
                 self.logger.debug("Already onboard as trusted issuer")
@@ -1257,13 +1260,13 @@ class OrganisationService:
         try:
             if not self.legal_entity_entity.is_did_in_registry:
                 await self.fill_did_registry(
-                    role=LegalEntityRoles.TrustedAccreditationOrganisation
+                    role=OrganisationRoles.TrustedAccreditationOrganisation
                 )
             else:
                 self.logger.debug("Already in DID registry")
             if not self.legal_entity_entity.is_onboarded_as_tao:
                 await self.fill_trusted_issuer_registry(
-                    role=LegalEntityRoles.TrustedAccreditationOrganisation
+                    role=OrganisationRoles.TrustedAccreditationOrganisation
                 )
             else:
                 self.logger.debug(
@@ -1352,8 +1355,8 @@ class OrganisationService:
             if not credential_offer_entity:
                 raise CredentialOfferNotFoundError("Credential offer not found")
 
-            credential_schema_entity: CredentialSchemaEntity = (
-                credential_offer_entity.credential_schema
+            data_agreement_model: DataAgreementModel = (
+                credential_offer_entity.data_agreement
             )
 
             if (
@@ -1362,13 +1365,13 @@ class OrganisationService:
             ):
                 raise CredentialPendingError("Credential is not available yet")
 
-            credential_id = f"urn:did:{credential_offer_entity.id}"
+            credential_id = f"urn:did:{str(credential_offer_entity.id)}"
             # credential_type = [
             #     "VerifiableCredential",
             #     "VerifiableAttestation",
-            #     credential_schema_entity.credential_type,
+            #     data_agreement_model.credential_type,
             # ]
-            credential_type = json.loads(credential_schema_entity.credential_types)
+            credential_type = data_agreement_model.credential_types
             credential_context = ["https://www.w3.org/2018/credentials/v1"]
             credential_schema = [
                 {
@@ -1376,9 +1379,8 @@ class OrganisationService:
                     "type": "FullJsonSchemaValidator2021",
                 }
             ]
-            credential_subject = json.loads(
-                credential_offer_entity.data_attribute_values
-            )
+            credential_subject = credential_offer_entity.data_attribute_values
+
             credential_subject["id"] = credential_offer_entity.client_id
             kid = f"{self.key_did.did}#{self.key_did._method_specific_id}"
             jti = credential_id
@@ -1493,8 +1495,8 @@ class OrganisationService:
             credential_offer_entity = repo.get_by_id(credential_offer_id)
             if not credential_offer_entity:
                 raise InvalidAccessTokenError(f"Invalid access token {access_token}")
-            credential_schema_entity: CredentialSchemaEntity = (
-                credential_offer_entity.credential_schema
+            data_agreement_model: DataAgreementModel = (
+                credential_offer_entity.data_agreement
             )
 
             AuthorisationService.verify_access_token(
@@ -1516,8 +1518,8 @@ class OrganisationService:
                     acceptance_token=acceptance_token
                 )
             else:
-                credential_id = f"urn:did:{credential_offer_entity.id}"
-                credential_type = json.loads(credential_schema_entity.credential_types)
+                credential_id = f"urn:did:{str(credential_offer_entity.id)}"
+                credential_type = data_agreement_model.credential_types
                 credential_context = ["https://www.w3.org/2018/credentials/v1"]
                 credential_schema = [
                     {
@@ -1525,9 +1527,8 @@ class OrganisationService:
                         "type": "FullJsonSchemaValidator2021",
                     }
                 ]
-                credential_subject = json.loads(
-                    credential_offer_entity.data_attribute_values
-                )
+                credential_subject = credential_offer_entity.data_attribute_values
+
                 credential_subject["id"] = credential_offer_entity.client_id
                 kid = f"{self.key_did.did}#{self.key_did._method_specific_id}"
                 jti = credential_id
@@ -1576,8 +1577,8 @@ class OrganisationService:
             if not credential_offer_entity:
                 raise InvalidAccessTokenError(f"Invalid access token {access_token}")
 
-            credential_schema_entity: CredentialSchemaEntity = (
-                credential_offer_entity.credential_schema
+            data_agreement_model: DataAgreementModel = (
+                credential_offer_entity.data_agreement
             )
 
         assert (
@@ -1620,8 +1621,8 @@ class OrganisationService:
         proxies = await tir_client.get_all_issuer_proxies_for_did(self.ebsi_did.did)
         proxy_url = proxies.items[0].href
 
-        credential_id = f"urn:did:{credential_offer_entity.id}"
-        credential_type = json.loads(credential_schema_entity.credential_types)
+        credential_id = f"urn:did:{str(credential_offer_entity.id)}"
+        credential_type = data_agreement_model.credential_types
 
         credential_context = ["https://www.w3.org/2018/credentials/v1"]
 
@@ -1951,7 +1952,7 @@ class OrganisationService:
 
     async def update_revocation_status_for_credential_offer(
         self,
-        credential_schema_id: str,
+        data_agreement_id: str,
         credential_offer_id: str,
         is_revoked: bool,
     ) -> Union[dict, None]:
@@ -1961,7 +1962,7 @@ class OrganisationService:
 
         with self.credential_offer_repository as offer_repo, self.credential_revocation_status_list_repository as revocation_repo:
             credential_offer_entity = offer_repo.get_by_id_and_credential_schema_id(
-                credential_offer_id, credential_schema_id
+                credential_offer_id, data_agreement_id
             )
             if credential_offer_entity is None:
                 raise CredentialOfferNotFoundError(
@@ -1995,7 +1996,7 @@ class OrganisationService:
                     did=credential_offer_entity.did,
                 )
             else:
-                revocation_list: CredentialRevocationStatusListEntity = (
+                revocation_list: CredentialRevocationStatusListModel = (
                     credential_offer_entity.credential_revocation_status_list
                 )
 
@@ -2022,7 +2023,7 @@ class OrganisationService:
 
     async def update_deferred_credential_offer_with_data_attribute_values(
         self,
-        credential_schema_id: str,
+        data_agreement_id: str,
         credential_offer_id: str,
         data_attribute_values: dict,
     ) -> Union[dict, None]:
@@ -2032,7 +2033,7 @@ class OrganisationService:
 
         with self.credential_offer_repository as repo:
             credential_offer_entity = repo.get_by_id_and_credential_schema_id(
-                credential_offer_id, credential_schema_id
+                credential_offer_id, data_agreement_id
             )
             if credential_offer_entity is None:
                 raise UpdateCredentialOfferError(
@@ -2055,18 +2056,18 @@ class OrganisationService:
                     f"Credential offer with id {credential_offer_id} is not in pending status"
                 )
 
-            credential_schema_entity: CredentialSchemaEntity = (
-                credential_offer_entity.credential_schema
+            data_agreement_model: DataAgreementModel = (
+                credential_offer_entity.data_agreement
             )
             if data_attribute_values:
-                data_attributes = json.loads(credential_schema_entity.data_attributes)
+                data_attributes = data_agreement_model.data_attributes
                 self._validate_data_attribute_values_against_data_attributes(
                     data_attribute_values, data_attributes
                 )
 
             credential_offer_entity = repo.update(
                 credential_offer_id,
-                data_attribute_values=json.dumps(data_attribute_values),
+                data_attribute_values=data_attribute_values,
                 credential_status=CredentialStatuses.Ready.value,
             )
             return credential_offer_entity.to_dict()
@@ -2080,7 +2081,7 @@ class OrganisationService:
         code_challenge_method: Optional[str] = None,
         redirect_uri: Optional[str] = None,
         authn_request: Optional[str] = None,
-    ) -> Union[CredentialOfferEntity, None]:
+    ) -> Union[CredentialOfferModel, None]:
         assert (
             self.credential_offer_repository is not None
         ), "Credential offer repository not found"
@@ -2128,19 +2129,19 @@ class OrganisationService:
                 )[0].get("types")
 
                 with self.credential_offer_repository as repo:
-                    credential_offer_entities = repo.get_all_by_client_id(client_id)
-                    if len(credential_offer_entities) == 0:
+                    credential_offers = repo.get_all_by_client_id(client_id)
+                    if len(credential_offers) == 0:
                         raise UpdateCredentialOfferError(
                             f"Credential offer with client ID {client_id} not found"
                         )
 
                     is_credential_offer_found = False
-                    for credential_offer_entity in credential_offer_entities:
-                        credential_offer_schema: CredentialSchemaEntity = (
-                            credential_offer_entity.credential_schema
+                    for credential_offer_entity in credential_offers:
+                        credential_offer_schema: DataAgreementModel = (
+                            credential_offer_entity.data_agreement
                         )
                         if (
-                            json.loads(credential_offer_schema.credential_types)[-1]
+                            credential_offer_schema.credential_types[-1]
                             == requested_credential_types[-1]
                         ):
                             is_credential_offer_found = True
@@ -2162,12 +2163,12 @@ class OrganisationService:
                     return credential_offer_entity
             else:
                 with self.credential_offer_repository as repo:
-                    credential_offer_entities = repo.get_all_by_client_id(client_id)
-                    if len(credential_offer_entities) == 0:
+                    credential_offers = repo.get_all_by_client_id(client_id)
+                    if len(credential_offers) == 0:
                         raise UpdateCredentialOfferError(
                             f"Credential offer with client ID {client_id} not found"
                         )
-                    credential_offer_entity = credential_offer_entities[0]
+                    credential_offer_entity = credential_offers[0]
                     credential_offer_entity = repo.update(
                         credential_offer_entity.id,
                         issuer_state=issuer_state,
@@ -2376,36 +2377,36 @@ class OrganisationService:
         ), "Credential schema repository not found"
 
         with self.credential_schema_repository as repo:
-            credential_schema_entity = repo.create(
-                legal_entity_id=self.legal_entity_entity.id,
-                credential_types=json.dumps(credential_types),
-                data_attributes=json.dumps(data_attributes),
+            data_agreement_model = repo.create(
+                organisation_id=self.legal_entity_entity.id,
+                credential_types=credential_types,
+                data_attributes=data_attributes,
             )
-            return credential_schema_entity.to_dict()
+            return data_agreement_model.to_dict()
 
     async def get_credential_schema_by_id(
-        self, credential_schema_id: str
-    ) -> CredentialSchemaEntity:
+        self, data_agreement_id: str
+    ) -> DataAgreementModel:
         assert (
             self.credential_schema_repository is not None
         ), "Credential schema repository not found"
         with self.credential_schema_repository as repo:
-            credential_schema_entity = repo.get_by_id(credential_schema_id)
-            return credential_schema_entity
+            data_agreement_model = repo.get_by_id(data_agreement_id)
+            return data_agreement_model
 
-    async def get_all_credential_schema(self) -> List[CredentialSchemaEntity]:
+    async def get_all_credential_schema(self) -> List[DataAgreementModel]:
         assert (
             self.credential_schema_repository is not None
         ), "Credential schema repository not found"
         with self.credential_schema_repository as repo:
             return repo.get_all()
 
-    async def delete_credential_schema_by_id(self, credential_schema_id) -> bool:
+    async def delete_credential_schema_by_id(self, data_agreement_id) -> bool:
         assert (
             self.credential_schema_repository is not None
         ), "Credential schema repository not found"
         with self.credential_schema_repository as repo:
-            return repo.delete(credential_schema_id)
+            return repo.delete(data_agreement_id)
 
     def _validate_data_attribute_values_against_data_attributes(
         self, data_attribute_values: dict, data_attributes: List[dict]
@@ -2423,7 +2424,7 @@ class OrganisationService:
 
     async def create_credential_offer(
         self,
-        credential_schema_id: str,
+        data_agreement_id: str,
         issuance_mode: CredentialIssuanceModes,
         is_pre_authorised: bool,
         supports_revocation: bool,
@@ -2458,14 +2459,14 @@ class OrganisationService:
             )
 
         with self.credential_schema_repository as repo:
-            credential_schema_entity = repo.get_by_id(credential_schema_id)
-            if not credential_schema_entity:
+            data_agreement_model = repo.get_by_id(data_agreement_id)
+            if not data_agreement_model:
                 raise CreateCredentialOfferError(
-                    f"Credential schema with id {credential_schema_id} not found"
+                    f"Credential schema with id {data_agreement_id} not found"
                 )
 
         if data_attribute_values:
-            data_attributes = json.loads(credential_schema_entity.data_attributes)
+            data_attributes = data_agreement_model.data_attributes
             self._validate_data_attribute_values_against_data_attributes(
                 data_attribute_values, data_attributes
             )
@@ -2477,8 +2478,8 @@ class OrganisationService:
             if supports_revocation:
                 revocation_list = revocation_repo.reserve_revocation_index()
             credential_offer_entity = credential_offer_repo.create(
-                credential_schema_id=credential_schema_entity.id,
-                data_attribute_values=json.dumps(data_attribute_values)
+                data_agreement_id=data_agreement_model.id,
+                data_attribute_values=data_attribute_values
                 if data_attribute_values
                 else None,
                 issuance_mode=issuance_mode.value,
@@ -2509,7 +2510,7 @@ class OrganisationService:
                     exp=exp,
                     kid=f"{self.key_did.did}#{self.key_did._method_specific_id}",
                     key=self.key_did._key,
-                    credential_offer_id=credential_offer_entity.id,
+                    credential_offer_id=str(credential_offer_entity.id),
                 )
 
                 credential_offer_entity = credential_offer_repo.update(
@@ -2526,7 +2527,7 @@ class OrganisationService:
                     exp=exp,
                     kid=f"{self.key_did.did}#{self.key_did._method_specific_id}",
                     key=self.key_did._key,
-                    credential_offer_id=credential_offer_entity.id,
+                    credential_offer_id=str(credential_offer_entity.id),
                 )
 
                 credential_offer_entity = credential_offer_repo.update(
@@ -2542,31 +2543,31 @@ class OrganisationService:
             return repo.delete(credential_offer_id)
 
     async def get_credential_offer_by_id_and_credential_schema_id(
-        self, credential_offer_id: str, credential_schema_id: str
-    ) -> Union[CredentialOfferEntity, None]:
+        self, credential_offer_id: str, data_agreement_id: str
+    ) -> Union[CredentialOfferModel, None]:
         assert (
             self.credential_offer_repository is not None
         ), "Credential offer repository not found"
         with self.credential_offer_repository as repo:
             credential_offer_entity = repo.get_by_id_and_credential_schema_id(
-                id=credential_offer_id, credential_schema_id=credential_schema_id
+                id=credential_offer_id, data_agreement_id=data_agreement_id
             )
             return credential_offer_entity
 
     async def get_all_credential_offers_by_credential_schema_id(
-        self, credential_schema_id: str
-    ) -> List[CredentialOfferEntity]:
+        self, data_agreement_id: str
+    ) -> List[CredentialOfferModel]:
         assert (
             self.credential_offer_repository is not None
         ), "Credential offer repository not found"
         with self.credential_offer_repository as repo:
             return repo.get_all_by_credential_schema_id(
-                credential_schema_id=credential_schema_id
+                data_agreement_id=data_agreement_id
             )
 
     async def get_credential_offer_by_id(
         self, credential_offer_id: str
-    ) -> Union[CredentialOfferEntity, None]:
+    ) -> Union[CredentialOfferModel, None]:
         assert (
             self.credential_offer_repository is not None
         ), "Credential offer repository not found"
@@ -2669,7 +2670,7 @@ class OrganisationService:
 
             if credential_offer_entity.is_pre_authorised:
                 raise CredentialOfferIsPreAuthorizedError(
-                    f"Credential offer with id {credential_offer_entity.id} is already pre-authorized"
+                    f"Credential offer with id {str(credential_offer_entity.id)} is already pre-authorized"
                 )
 
             # Create authorisation code and new state and save to db.
@@ -2769,7 +2770,7 @@ class OrganisationService:
                 nonce=nonce,
                 kid=self.key_did._key.key_id,
                 key=self.key_did._key,
-                credential_offer_id=credential_offer_entity.id,
+                credential_offer_id=str(credential_offer_entity.id),
             )
 
             token_response = TokenResponse(
@@ -2789,8 +2790,8 @@ class OrganisationService:
 
         with self.credential_offer_repository as repo:
             credential_offer_entity = repo.get_by_id(credential_offer_id)
-            credential_schema_entity: CredentialSchemaEntity = (
-                credential_offer_entity.credential_schema
+            data_agreement_model: DataAgreementModel = (
+                credential_offer_entity.data_agreement
             )
             if credential_offer_entity is None:
                 raise CredentialOfferNotFoundError(
@@ -2801,7 +2802,7 @@ class OrganisationService:
                 "credentials": [
                     {
                         "format": "jwt_vc",
-                        "types": json.loads(credential_schema_entity.credential_types),
+                        "types": data_agreement_model.credential_types,
                         "trust_framework": {
                             "name": "ebsi",
                             "type": "Accreditation",

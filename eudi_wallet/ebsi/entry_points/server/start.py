@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from typing import Optional
 
 import click
 import debugpy
@@ -7,7 +8,7 @@ from aiohttp import web
 from aiohttp.web_request import Request
 from aiokafka import AIOKafkaProducer
 from aiokafka.errors import KafkaConnectionError
-from pyngrok import ngrok  # type: ignore
+from pyngrok import ngrok
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -15,13 +16,14 @@ from eudi_wallet.ebsi.entry_points.server.middlewares import (
     error_middleware,
     logging_middleware,
 )
-from eudi_wallet.ebsi.entry_points.server.routes import routes
+from eudi_wallet.ebsi.entry_points.server.routes.individual import individual_routes
+from eudi_wallet.ebsi.entry_points.server.routes.organisation import organisation_routes
 from eudi_wallet.ebsi.entry_points.server.startup import app_startup
-from eudi_wallet.ebsi.models.base import Base
+from eudi_wallet.ebsi.models.base import Base, import_models
 
 
 class AppLogger:
-    def __init__(self, name, level=logging.DEBUG):
+    def __init__(self, name: str, level: int = logging.DEBUG):
         self.logger = logging.getLogger(name)
         self.logger.setLevel(level)
 
@@ -43,6 +45,7 @@ class DBSetup:
         Session = sessionmaker(bind=engine)
 
         # It creates a table if it does not exist.
+        import_models()
         Base.metadata.create_all(engine)
 
         return Session
@@ -52,7 +55,7 @@ class NgrokSetup:
     def __init__(self, auth_token):
         self.auth_token = auth_token
 
-    def configure_ngrok(self, port: int, custom_domain: str):
+    def configure_ngrok(self, port: int, custom_domain: str) -> ngrok.NgrokTunnel:
         ngrok.set_auth_token(self.auth_token)
         ngrok_tunnel = ngrok.connect(port, subdomain=custom_domain)
         return ngrok_tunnel
@@ -63,13 +66,25 @@ async def handle_404(request: Request):
 
 
 class ServerSetup:
-    def __init__(self, db_session, producer, logger, kafka_topic, subdomain):
+    def __init__(
+        self,
+        db_session: object,
+        producer: object,
+        logger: logging.Logger,
+        kafka_topic: str,
+        subdomain: str,
+        debug: bool,
+    ):
         self.db_session = db_session
         self.producer = producer
         self.logger = logger
         self.kafka_topic = kafka_topic
         self.subdomain = subdomain
-        self.domain = f"https://{self.subdomain}.ngrok.io"
+
+        if debug:
+            self.domain = f"https://{self.subdomain}.ngrok.io"
+        else:
+            self.domain = f"https://{self.subdomain}.igrant.io"
 
     async def start_server(self, port: int):
         app = web.Application(middlewares=[error_middleware, logging_middleware])
@@ -84,7 +99,8 @@ class ServerSetup:
         app.on_startup.append(app_startup)
 
         # Add routes
-        app.add_routes(routes)
+        app.add_routes(individual_routes)
+        app.add_routes(organisation_routes)
         app.add_routes([web.route("*", "/{tail:.*}", handle_404, name="handle_404")])
 
         runner = web.AppRunner(app)
@@ -95,8 +111,6 @@ class ServerSetup:
 
         return runner, site
 
-
-class ServerTeardown:
     async def stop_server(self, runner, site):
         await site.stop()
         await runner.cleanup()
@@ -104,10 +118,10 @@ class ServerTeardown:
 
 @click.command()
 @click.option("--port", envvar="PORT", default=8080)
-@click.option("--ngrok-auth-token", envvar="NGROK_AUTH_TOKEN", default=None)
-@click.option("--ngrok-subdomain", envvar="NGROK_SUBDOMAIN", default="ebsi-wallet")
-@click.option("--kafka-broker-address", envvar="KAFKA_BROKER_ADDRESS", default=None)
-@click.option("--kafka-topic", envvar="KAFKA_TOPIC", default=None)
+@click.option("--ngrok-auth-token", envvar="NGROK_AUTH_TOKEN")
+@click.option("--ngrok-subdomain", envvar="NGROK_SUBDOMAIN")
+@click.option("--kafka-broker-address", envvar="KAFKA_BROKER_ADDRESS")
+@click.option("--kafka-topic", envvar="KAFKA_TOPIC")
 @click.option(
     "--log-level",
     default="DEBUG",
@@ -128,6 +142,11 @@ class ServerTeardown:
     type=int,
     help="Debug port to listen on",
 )
+@click.option("--database-user", envvar="DATABASE_USER")
+@click.option("--database-password", envvar="DATABASE_PASSWORD")
+@click.option("--database-host", envvar="DATABASE_HOST")
+@click.option("--database-port", envvar="DATABASE_PORT")
+@click.option("--database-db", envvar="DATABASE_DB")
 def main(
     port,
     ngrok_auth_token,
@@ -138,8 +157,13 @@ def main(
     debug,
     debug_host,
     debug_port,
+    database_user,
+    database_password,
+    database_host,
+    database_port,
+    database_db,
 ):
-    level = getattr(logging, log_level.upper(), None)
+    level: int = getattr(logging, log_level.upper())
     logger = AppLogger(__name__, level=level).logger
 
     if debug:
@@ -149,11 +173,12 @@ def main(
         debugpy.wait_for_client()
         logger.debug("Debugger attached!")
 
-    db_session = DBSetup("sqlite:///wallet.db").setup_db()
+    database_url = f"postgresql+psycopg2://{database_user}:{database_password}@{database_host}:{database_port}/{database_db}"
+    db_session = DBSetup(database_url).setup_db()
 
     loop = asyncio.get_event_loop()
 
-    producer = None
+    producer: Optional[AIOKafkaProducer] = None
     try:
         if kafka_broker_address:
             producer = AIOKafkaProducer(
@@ -163,22 +188,28 @@ def main(
     except KafkaConnectionError as e:
         logger.error(f"Unable to connect to Kafka broker: {e}")
 
-    server = ServerSetup(db_session, producer, logger, kafka_topic, ngrok_subdomain)
+    assert producer is not None
+
+    server = ServerSetup(
+        db_session, producer, logger, kafka_topic, ngrok_subdomain, debug
+    )
 
     runner, site = loop.run_until_complete(server.start_server(port))
 
     # Only set up ngrok if auth token is provided
     ngrok_tunnel = None
+    tunnel: Optional[ngrok.NgrokTunnel] = None
     if ngrok_auth_token:
         ngrok_tunnel = NgrokSetup(ngrok_auth_token)
         try:
             tunnel = ngrok_tunnel.configure_ngrok(port, ngrok_subdomain)
             logger.info(f"ngrok tunnel URL: {tunnel.public_url}")
-
         except Exception as e:
             logger.error(f"Error while setting up ngrok: {e}")
     else:
         logger.info("Starting without ngrok...")
+
+    assert tunnel is not None
 
     try:
         loop.run_forever()
@@ -188,7 +219,7 @@ def main(
         pass
 
     finally:
-        loop.run_until_complete(server.stop(runner, site))
+        loop.run_until_complete(server.stop_server(runner, site))
         loop.run_until_complete(producer.stop())
         loop.close()
 

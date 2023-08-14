@@ -166,3 +166,4 @@ cython_debug/
 wallet.db
 jsonschema_tests.py
 deploy_version
+resources/kubernetes/

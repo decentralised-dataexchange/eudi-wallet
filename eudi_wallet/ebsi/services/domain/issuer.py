@@ -41,7 +41,7 @@ class IssuerService:
             "Authorization": f"Bearer {acceptance_token}",
         }
 
-        async def is_credential_available(res: Response):
+        async def is_credential_available(res: Response) -> bool:
             return res.status_code == 200
 
         async with HttpxClient(logger=self.logger) as http_client:
@@ -63,6 +63,7 @@ class IssuerService:
         self,
         send_credential_request: SendCredentialRequest,
     ) -> CredentialResponse:
+        assert self.credential_endpoint is not None
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {send_credential_request.token}",
