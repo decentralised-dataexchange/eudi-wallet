@@ -9,6 +9,9 @@ from eudi_wallet.ebsi.entry_points.server.decorators import (
     RequestContext,
     inject_request_context,
 )
+from eudi_wallet.ebsi.exceptions.application.organisation import (
+    CreateDataAgreementUsecaseError,
+)
 from eudi_wallet.ebsi.usecases.organisation.create_data_agreement_usecase import (
     CreateDataAgreementUsecase,
 )
@@ -109,18 +112,13 @@ async def handle_patch_update_organisation(request: Request, context: RequestCon
         raise web.HTTPBadRequest(reason="Invalid request payload")
 
 
-class DataAttributeReq(BaseModel):
-    attribute_name: constr(min_length=1, strip_whitespace=True)  # type: ignore
-    attribute_description: constr(min_length=1, strip_whitespace=True)  # type: ignore
-
-
 class CreateDataAgreementReq(BaseModel):
     name: constr(min_length=1, strip_whitespace=True)  # type: ignore
     exchange_mode: DataAgreementExchangeModes
     credential_types: Optional[
         conlist(constr(min_length=1, strip_whitespace=True), min_length=1)  # type: ignore
     ] = None
-    data_attributes: conlist(DataAttributeReq, min_length=1)  # type: ignore
+    data_attributes: dict
 
 
 @organisation_routes.post(
@@ -142,10 +140,8 @@ async def handle_post_create_data_agreement(request: Request, context: RequestCo
             dataagreement_repository=context.data_agreement_repository,
             logger=context.app_context.logger,
         )
-        data_attributes = [
-            data_attribute.model_dump()
-            for data_attribute in create_data_agreement_req.data_attributes
-        ]
+        data_attributes = create_data_agreement_req.data_attributes
+
         data_agreement = usecase.execute(
             organisation_id=organisation_id,
             name=create_data_agreement_req.name,
@@ -154,6 +150,8 @@ async def handle_post_create_data_agreement(request: Request, context: RequestCo
             credential_types=create_data_agreement_req.credential_types,
         )
         return web.json_response(data_agreement.to_dict(), status=201)
+    except CreateDataAgreementUsecaseError as e:
+        raise web.HTTPBadRequest(reason=e)
     except ValidationError as e:
         raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
     except json.decoder.JSONDecodeError:

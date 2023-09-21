@@ -45,6 +45,9 @@ class CredentialOfferModel(Base):
     # FIXME: Temporary hack to handle verifiable presentations
     vp_token_request_state = Column(String, nullable=True)
     vp_token_request = Column(String, nullable=True)
+    vp_token_qr_code = Column(String, nullable=True)
+    vp_token_response = Column(String, nullable=True)
+    issuer_qr_code = Column(String, nullable=True)
 
     client_id = Column(String, nullable=True)
     code_challenge = Column(String, nullable=True)

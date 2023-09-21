@@ -209,8 +209,6 @@ def main(
     else:
         logger.info("Starting without ngrok...")
 
-    assert tunnel is not None
-
     try:
         loop.run_forever()
 

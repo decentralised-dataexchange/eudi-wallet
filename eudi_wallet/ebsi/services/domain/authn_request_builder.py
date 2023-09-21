@@ -21,17 +21,19 @@ class AuthorizationRequestBuilder:
 
     @dataclass
     class AuthorizationRequestJwtPayload(DataClassJsonMixin):
-        iss: str
-        aud: str
-        response_type: str
-        scope: str
-        nonce: str
-        client_id: str
-        redirect_uri: str
-        client_metadata: "AuthorizationRequestBuilder.ClientMetadata"
-        authorization_details: typing.List[
-            "AuthorizationRequestBuilder.AuthorizationDetails"
-        ]
+        client_metadata: typing.Optional[
+            "AuthorizationRequestBuilder.ClientMetadata"
+        ] = None
+        authorization_details: typing.Optional[
+            typing.List["AuthorizationRequestBuilder.AuthorizationDetails"]
+        ] = None
+        iss: typing.Optional[str] = None
+        aud: typing.Optional[str] = None
+        response_type: typing.Optional[str] = None
+        scope: typing.Optional[str] = None
+        nonce: typing.Optional[str] = None
+        client_id: typing.Optional[str] = None
+        redirect_uri: typing.Optional[str] = None
 
     def __init__(
         self,
@@ -44,10 +46,10 @@ class AuthorizationRequestBuilder:
         client_id: typing.Optional[str] = None,
         redirect_uri: typing.Optional[str] = None,
         client_metadata: typing.Optional[
-            typing.List["AuthorizationRequestBuilder.ClientMetadata"]
+            "AuthorizationRequestBuilder.ClientMetadata"
         ] = None,
         authorization_details: typing.Optional[
-            "AuthorizationRequestBuilder.AuthorizationDetail"
+            typing.List["AuthorizationRequestBuilder.AuthorizationDetails"]
         ] = None,
     ):
         self.iss = iss
@@ -61,6 +63,7 @@ class AuthorizationRequestBuilder:
         self.redirect_uri = redirect_uri
         self.client_metadata = client_metadata
         self.authorization_details = authorization_details
+        self.issuer_domain: typing.Optional[str] = None
 
     def _get_kid(self, key_did):
         return key_did.public_key_jwk.get("kid")

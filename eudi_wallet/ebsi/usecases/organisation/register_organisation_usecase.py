@@ -1,13 +1,14 @@
-import uuid
-from logging import Logger
-from time import time
-from typing import Optional
+import time
 
-from mnemonic import Mnemonic
+# import uuid
+from logging import Logger
+from typing import Optional
 
 from eudi_wallet.ebsi.models.organisation import OrganisationModel
 from eudi_wallet.ebsi.repositories.organisation import SqlAlchemyOrganisationRepository
 from eudi_wallet.ebsi.value_objects.application.organisation import OrganisationRoles
+
+# from mnemonic import Mnemonic
 
 
 class RegisterOrganisationUsecase:
@@ -25,12 +26,12 @@ class RegisterOrganisationUsecase:
     ) -> OrganisationModel:
         # Create an organistion in db
         with self.organisation_repository as repo:
-            mnemo = Mnemonic("english")
-            seed_phrase = mnemo.generate(strength=256)
-            # cryptographic_seed = str(time.time())
+            # mnemo = Mnemonic("english")
+            # seed_phrase = mnemo.generate(strength=256)
+            cryptographic_seed = str(time.time())
             return repo.create(
                 name=name,
-                cryptographic_seed=seed_phrase,
+                cryptographic_seed=cryptographic_seed,
                 description=description,
                 logo_url=logo_url,
                 role=OrganisationRoles.Issuer.value,

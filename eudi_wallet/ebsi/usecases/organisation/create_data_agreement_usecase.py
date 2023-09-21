@@ -1,11 +1,16 @@
-import json
 from logging import Logger
 from typing import List, Optional
 
+from jsonschema import exceptions, validate
+
+from eudi_wallet.ebsi.exceptions.application.organisation import (
+    CreateDataAgreementUsecaseError,
+)
 from eudi_wallet.ebsi.models.data_agreement import DataAgreementModel
 from eudi_wallet.ebsi.repositories.data_agreement import (
     SqlAlchemyDataAgreementRepository,
 )
+from eudi_wallet.ebsi.utils.jsonschema import meta_schema_draft_7
 
 
 class CreateDataAgreementUsecase:
@@ -24,7 +29,7 @@ class CreateDataAgreementUsecase:
         self,
         organisation_id: str,
         name: str,
-        data_attributes: List[dict],
+        data_attributes: dict,
         exchange_mode: str,
         credential_types: Optional[List[str]] = None,
     ) -> DataAgreementModel:
@@ -35,6 +40,10 @@ class CreateDataAgreementUsecase:
                 self._convert_sentence_to_pascal_case(name),
             ]
 
+        try:
+            validate(instance=data_attributes, schema=meta_schema_draft_7)
+        except exceptions.ValidationError as e:
+            raise CreateDataAgreementUsecaseError(e.message)
         with self.dataagreement_repository as repo:
             return repo.create(
                 organisation_id=organisation_id,

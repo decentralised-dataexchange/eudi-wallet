@@ -45,7 +45,10 @@ from eudi_wallet.ebsi.exceptions.domain.issuer import (
 )
 from eudi_wallet.ebsi.services.domain.utils.did import generate_and_store_did
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
-from eudi_wallet.ebsi.value_objects.application.organisation import OrganisationRoles
+from eudi_wallet.ebsi.value_objects.application.organisation import (
+    DataAgreementExchangeModes,
+    OrganisationRoles,
+)
 from eudi_wallet.ebsi.value_objects.domain.authn import (
     AuthorisationGrants,
     AuthorizationRequestQueryParams,
@@ -533,7 +536,7 @@ async def handle_post_token(request: Request, context: RequestContext):
         raise web.HTTPBadRequest(text=str(e))
 
 
-class CreateCredentialOfferReq(BaseModel):
+class CreateDataSourceCredentialOfferReq(BaseModel):
     issuance_mode: CredentialIssuanceModes
     is_pre_authorised: bool = False
     supports_revocation: bool = False
@@ -556,18 +559,34 @@ async def handle_post_create_credential_offer(
     data_agreement_id = request.match_info.get("data_agreement_id")
 
     try:
-        data = await request.json()
-        create_credential_offer_req = CreateCredentialOfferReq(**data)
-        credential_offer = await context.legal_entity_service.create_credential_offer(
-            data_agreement_id=data_agreement_id,
-            data_attribute_values=create_credential_offer_req.data_attribute_values,
-            issuance_mode=create_credential_offer_req.issuance_mode,
-            is_pre_authorised=create_credential_offer_req.is_pre_authorised,
-            user_pin=create_credential_offer_req.user_pin,
-            client_id=create_credential_offer_req.client_id,
-            supports_revocation=create_credential_offer_req.supports_revocation,
-            trust_framework=create_credential_offer_req.trust_framework,
-        )
+        with context.data_agreement_repository as repo:
+            data_agreement_model = repo.get_by_id(data_agreement_id)
+            if not data_agreement_model:
+                raise CreateCredentialOfferError(
+                    f"Credential schema with id {data_agreement_id} not found"
+                )
+        if (
+            data_agreement_model.exchange_mode
+            == DataAgreementExchangeModes.DataSource.value
+        ):
+            data = await request.json()
+            create_credential_offer_req = CreateDataSourceCredentialOfferReq(**data)
+            credential_offer = await context.legal_entity_service.create_credential_offer(
+                data_agreement_id=data_agreement_id,
+                data_attribute_values=create_credential_offer_req.data_attribute_values,
+                issuance_mode=create_credential_offer_req.issuance_mode,
+                is_pre_authorised=create_credential_offer_req.is_pre_authorised,
+                user_pin=create_credential_offer_req.user_pin,
+                client_id=create_credential_offer_req.client_id,
+                supports_revocation=create_credential_offer_req.supports_revocation,
+                trust_framework=create_credential_offer_req.trust_framework,
+            )
+        else:
+            credential_offer = (
+                await context.legal_entity_service.create_credential_offer(
+                    data_agreement_id=data_agreement_id
+                )
+            )
 
         return web.json_response(credential_offer, status=201)
     except ValidateDataAttributeValuesAgainstDataAttributesError as e:
@@ -599,15 +618,29 @@ async def handle_patch_update_credential_offer(
     data_agreement_id = request.match_info.get("data_agreement_id")
     credential_offer_id = request.match_info.get("credential_offer_id")
     try:
-        data = await request.json()
-        update_credential_offer_req = UpdateCredentialOfferReq(**data)
-        credential_offer = await context.legal_entity_service.update_deferred_credential_offer_with_data_attribute_values(
-            credential_offer_id=credential_offer_id,
-            data_agreement_id=data_agreement_id,
-            data_attribute_values=update_credential_offer_req.data_attribute_values,
-        )
+        with context.data_agreement_repository as repo:
+            data_agreement_model = repo.get_by_id(data_agreement_id)
+            if not data_agreement_model:
+                raise CreateCredentialOfferError(
+                    f"Credential schema with id {data_agreement_id} not found"
+                )
+        if (
+            data_agreement_model.exchange_mode
+            == DataAgreementExchangeModes.DataSource.value
+        ):
+            data = await request.json()
+            update_credential_offer_req = UpdateCredentialOfferReq(**data)
+            credential_offer = await context.legal_entity_service.update_deferred_credential_offer_with_data_attribute_values(
+                credential_offer_id=credential_offer_id,
+                data_agreement_id=data_agreement_id,
+                data_attribute_values=update_credential_offer_req.data_attribute_values,
+            )
 
-        return web.json_response(credential_offer)
+            return web.json_response(credential_offer)
+        else:
+            raise web.HTTPBadRequest(
+                text=str("Data agreement exchange mode must be data-source")
+            )
     except ValidateDataAttributeValuesAgainstDataAttributesError as e:
         raise web.HTTPBadRequest(text=str(e))
     except UpdateCredentialOfferError as e:
@@ -761,6 +794,26 @@ async def handle_get_initiate_credential_offer(
 
 
 @individual_routes.get(
+    "/verifiable-presentation/{credential_offer_id}",
+    name="handle_get_get_verifiable_presentation_request_by_reference",
+)
+@inject_request_context()
+async def handle_get_get_verifiable_presentation_request_by_reference(
+    request: Request, context: RequestContext
+):
+    credential_offer_id = request.match_info.get("credential_offer_id")
+
+    try:
+        credential_offer_response = await context.legal_entity_service.get_verifiable_presentation_request_by_reference(
+            credential_offer_id=credential_offer_id
+        )
+    except CredentialOfferNotFoundError as e:
+        raise web.HTTPBadRequest(text=str(e))
+
+    return web.Response(text=credential_offer_response, content_type="application/jwt")
+
+
+@individual_routes.get(
     "/credential-offer/{credential_offer_id}",
     name="handle_get_get_credential_offer_by_reference",
 )
@@ -797,5 +850,4 @@ async def handle_get_get_id_token_request_by_uri(
     except CredentialOfferNotFoundError as e:
         raise web.HTTPBadRequest(text=str(e))
 
-    return web.json_response(id_token_request_jwt, content_type="application/jwt")
-    return web.json_response(id_token_request_jwt, content_type="application/jwt")
+    return web.Response(body=id_token_request_jwt, content_type="application/jwt")

@@ -68,3 +68,7 @@ class OnboardingToDIDRegistryError(OnboardingToEBSIError):
 
 class OnboardingToTrustedIssuersRegistryError(OnboardingToEBSIError):
     pass
+
+
+class CreateDataAgreementUsecaseError(Exception):
+    pass

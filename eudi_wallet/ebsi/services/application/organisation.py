@@ -8,6 +8,7 @@ from typing import List, Optional, Tuple, Union
 
 from eth_account import Account
 from eth_account.signers.local import LocalAccount
+from jsonschema import exceptions, validate
 from jwcrypto import jwk
 
 from eudi_wallet.ebsi.exceptions.application.organisation import (
@@ -76,7 +77,10 @@ from eudi_wallet.ebsi.utils.hex import (
     generate_random_ebsi_reserved_attribute_id,
 )
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
-from eudi_wallet.ebsi.value_objects.application.organisation import OrganisationRoles
+from eudi_wallet.ebsi.value_objects.application.organisation import (
+    DataAgreementExchangeModes,
+    OrganisationRoles,
+)
 from eudi_wallet.ebsi.value_objects.domain.authn import (
     AuthorisationGrants,
     CreateIDTokenResponse,
@@ -1309,9 +1313,9 @@ class OrganisationService:
         credential_status: Optional[dict] = None,
         terms_of_use: Optional[Union[dict, List[dict]]] = None,
     ) -> str:
-        seconds_in_one_year = 31536000
+        seconds_in_5_minutes = 300
         iss_in_epoch, issuance_date = generate_ISO8601_UTC()
-        exp_in_epoch, expiration_date = generate_ISO8601_UTC(seconds_in_one_year)
+        exp_in_epoch, expiration_date = generate_ISO8601_UTC(seconds_in_5_minutes)
         vc = {
             "@context": credential_context,
             "id": credential_id,
@@ -2060,10 +2064,31 @@ class OrganisationService:
                 credential_offer_entity.data_agreement
             )
             if data_attribute_values:
-                data_attributes = data_agreement_model.data_attributes
-                self._validate_data_attribute_values_against_data_attributes(
-                    data_attribute_values, data_attributes
-                )
+                data_attributes_schema = data_agreement_model.data_attributes
+                data_attribute_values["id"] = f"urn:did:{str(uuid.uuid4())}"
+                try:
+                    seconds_in_one_year = 31536000
+                    _, issuance_date = generate_ISO8601_UTC()
+                    _, expiration_date = generate_ISO8601_UTC(seconds_in_one_year)
+                    vc = {
+                        "@context": ["https://www.w3.org/2018/credentials/v1"],
+                        "id": f"urn:did:{str(uuid.uuid4())}",
+                        "type": data_agreement_model.credential_types,
+                        "issuer": self.key_did.did,
+                        "issuanceDate": issuance_date,
+                        "validFrom": issuance_date,
+                        "expirationDate": expiration_date,
+                        "issued": issuance_date,
+                        "credentialSubject": data_attribute_values,
+                        "credentialSchema": {
+                            "id": "",
+                            "type": "FullJsonSchemaValidator2021",
+                        },
+                    }
+                    validate(instance=vc, schema=data_attributes_schema)
+                    del data_attribute_values["id"]
+                except exceptions.ValidationError as e:
+                    raise UpdateCredentialOfferError(e.message)
 
             credential_offer_entity = repo.update(
                 credential_offer_id,
@@ -2422,12 +2447,101 @@ class OrganisationService:
                     f"Data attribute value for {data_attribute.get('attribute_name')} not found"
                 )
 
+    async def prepare_vp_token_request_for_credential_offer(
+        self,
+        credential_offer_id: str,
+        to_be_verified_credential_type: str,
+    ) -> str:
+        assert self.auth_domain is not None, "Auth domain not found"
+        assert (
+            self.credential_offer_repository is not None
+        ), "Credential offer repository not found"
+
+        iss_service = IssuerService(
+            self.credential_issuer_configuration.credential_endpoint,
+            logger=self.logger,
+        )
+        state = str(uuid.uuid4())
+        iss = self.auth_domain
+        exp = int(time.time()) + 3600
+        response_type = "vp_token"
+        response_mode = "direct_post"
+        client_id = self.auth_domain
+        redirect_uri = f"{self.auth_domain}/direct_post"
+        scope = "openid"
+        nonce = str(uuid.uuid4())
+        key = self.key_did._key
+        key_id = key.key_id
+        definition_id = str(uuid.uuid4())
+        input_descriptor_1_id = str(uuid.uuid4())
+        presentation_definition = {
+            "id": definition_id,
+            "format": {"jwt_vc": {"alg": ["ES256"]}, "jwt_vp": {"alg": ["ES256"]}},
+            "input_descriptors": [
+                {
+                    "id": input_descriptor_1_id,
+                    "constraints": {
+                        "fields": [
+                            {
+                                "path": ["$.type"],
+                                "filter": {
+                                    "type": "array",
+                                    "contains": {
+                                        "const": to_be_verified_credential_type
+                                    },
+                                },
+                            }
+                        ]
+                    },
+                }
+            ],
+        }
+        vp_token_request = iss_service.create_vp_token_request(
+            state=state,
+            iss=iss,
+            aud=client_id,
+            exp=exp,
+            response_type=response_type,
+            response_mode=response_mode,
+            client_id=client_id,
+            redirect_uri=redirect_uri,
+            scope=scope,
+            nonce=nonce,
+            key_id=key_id,
+            key=key,
+            presentation_definition=presentation_definition,
+        )
+        encoded_params = urllib.parse.urlencode(
+            {
+                "client_id": client_id,
+                "response_type": response_type,
+                "scope": scope,
+                "redirect_uri": redirect_uri,
+                "request_uri": f"{self.auth_domain}/verifiable-presentation/{credential_offer_id}",
+                "response_mode": response_mode,
+                "state": state,
+                "nonce": nonce,
+                "presentation_definition": json.dumps(presentation_definition),
+            }
+        )
+        redirection_url = f"openid://?{encoded_params}"
+        # Save state to credential offer.
+        with self.credential_offer_repository as repo:
+            credential_offer_entity = repo.update(
+                id=credential_offer_id,
+                vp_token_request_state=state,
+                vp_token_request=vp_token_request,
+                vp_token_qr_code=redirection_url,
+            )
+
+        return redirection_url, credential_offer_entity
+
     async def create_credential_offer(
         self,
         data_agreement_id: str,
-        issuance_mode: CredentialIssuanceModes,
-        is_pre_authorised: bool,
-        supports_revocation: bool,
+        issuance_mode: CredentialIssuanceModes = None,
+        is_pre_authorised: bool = False,
+        supports_revocation: bool = False,
         user_pin: Optional[str] = None,
         client_id: Optional[str] = None,
         data_attribute_values: Optional[dict] = None,
@@ -2440,24 +2554,6 @@ class OrganisationService:
             self.credential_schema_repository is not None
         ), "Credential schema repository not found"
 
-        if is_pre_authorised and not user_pin:
-            raise UserPinRequiredError(
-                "User pin is required for pre-authorised credential offers"
-            )
-
-        if is_pre_authorised and not client_id:
-            raise ClientIdRequiredError(
-                "Client id is required for pre-authorised credential offers"
-            )
-
-        if (
-            issuance_mode.value == CredentialIssuanceModes.InTime
-            and not data_attribute_values
-        ):
-            raise CreateCredentialOfferError(
-                "Data attribute values are required for in time issuance"
-            )
-
         with self.credential_schema_repository as repo:
             data_agreement_model = repo.get_by_id(data_agreement_id)
             if not data_agreement_model:
@@ -2465,74 +2561,131 @@ class OrganisationService:
                     f"Credential schema with id {data_agreement_id} not found"
                 )
 
-        if data_attribute_values:
-            data_attributes = data_agreement_model.data_attributes
-            self._validate_data_attribute_values_against_data_attributes(
-                data_attribute_values, data_attributes
+        if (
+            data_agreement_model.exchange_mode
+            == DataAgreementExchangeModes.DataSource.value
+        ):
+            if is_pre_authorised and not user_pin:
+                raise UserPinRequiredError(
+                    "User pin is required for pre-authorised credential offers"
+                )
+
+            if is_pre_authorised and not client_id:
+                raise ClientIdRequiredError(
+                    "Client id is required for pre-authorised credential offers"
+                )
+
+            if (
+                issuance_mode.value == CredentialIssuanceModes.InTime
+                and not data_attribute_values
+            ):
+                raise CreateCredentialOfferError(
+                    "Data attribute values are required for in time issuance"
+                )
+
+            if data_attribute_values:
+                data_attributes_schema = data_agreement_model.data_attributes
+                data_attribute_values["id"] = f"urn:did:{str(uuid.uuid4())}"
+                try:
+                    seconds_in_one_year = 31536000
+                    _, issuance_date = generate_ISO8601_UTC()
+                    _, expiration_date = generate_ISO8601_UTC(seconds_in_one_year)
+                    vc = {
+                        "@context": ["https://www.w3.org/2018/credentials/v1"],
+                        "id": f"urn:did:{str(uuid.uuid4())}",
+                        "type": data_agreement_model.credential_types,
+                        "issuer": self.key_did.did,
+                        "issuanceDate": issuance_date,
+                        "validFrom": issuance_date,
+                        "expirationDate": expiration_date,
+                        "issued": issuance_date,
+                        "credentialSubject": data_attribute_values,
+                        "credentialSchema": {
+                            "id": "",
+                            "type": "FullJsonSchemaValidator2021",
+                        },
+                    }
+                    validate(instance=vc, schema=data_attributes_schema)
+                    del data_attribute_values["id"]
+                except exceptions.ValidationError as e:
+                    raise CreateCredentialOfferError(e.message)
+
+            iat = int(time.time())
+            exp = iat + 3600
+
+            with self.credential_offer_repository as credential_offer_repo, self.credential_revocation_status_list_repository as revocation_repo:
+                if supports_revocation:
+                    revocation_list = revocation_repo.reserve_revocation_index()
+                credential_offer_entity = credential_offer_repo.create(
+                    data_agreement_id=data_agreement_model.id,
+                    data_attribute_values=data_attribute_values
+                    if data_attribute_values
+                    else None,
+                    issuance_mode=issuance_mode.value,
+                    is_pre_authorised=is_pre_authorised,
+                    user_pin=user_pin,
+                    client_id=client_id,
+                    credential_status=CredentialStatuses.Ready.value
+                    if data_attribute_values
+                    else CredentialStatuses.Pending.value,
+                    supports_revocation=supports_revocation,
+                    is_revoked=False,
+                    credential_revocation_status_list_index=revocation_list.last_assigned_index
+                    if supports_revocation
+                    else -1,
+                    credential_revocation_status_list_id=revocation_list.id
+                    if supports_revocation
+                    else None,
+                    trust_framework=trust_framework.value if trust_framework else None,
+                )
+
+                if is_pre_authorised:
+                    pre_authorised_code = IssuerService.create_pre_authorised_code(
+                        iss=self.key_did.did,
+                        aud=self.key_did.did,
+                        sub=self.key_did.did,
+                        iat=iat,
+                        nbf=iat,
+                        exp=exp,
+                        kid=f"{self.key_did.did}#{self.key_did._method_specific_id}",
+                        key=self.key_did._key,
+                        credential_offer_id=str(credential_offer_entity.id),
+                    )
+
+                    credential_offer_entity = credential_offer_repo.update(
+                        id=credential_offer_entity.id,
+                        pre_authorised_code=pre_authorised_code,
+                    )
+                else:
+                    issuer_state = IssuerService.create_issuer_state(
+                        iss=self.key_did.did,
+                        aud=self.key_did.did,
+                        sub=self.key_did.did,
+                        iat=iat,
+                        nbf=iat,
+                        exp=exp,
+                        kid=f"{self.key_did.did}#{self.key_did._method_specific_id}",
+                        key=self.key_did._key,
+                        credential_offer_id=str(credential_offer_entity.id),
+                    )
+
+                    credential_offer_entity = credential_offer_repo.update(
+                        id=credential_offer_entity.id, issuer_state=issuer_state
+                    )
+        else:
+            with self.credential_offer_repository as credential_offer_repo:
+                credential_offer_entity = credential_offer_repo.create(
+                    data_agreement_id=data_agreement_model.id,
+                    data_attribute_values={},
+                    issuance_mode=CredentialIssuanceModes.InTime.value,
+                )
+            (
+                _,
+                credential_offer_entity,
+            ) = await self.prepare_vp_token_request_for_credential_offer(
+                credential_offer_entity.id,
+                data_agreement_model.credential_types[-1],
             )
-
-        iat = int(time.time())
-        exp = iat + 3600
-
-        with self.credential_offer_repository as credential_offer_repo, self.credential_revocation_status_list_repository as revocation_repo:
-            if supports_revocation:
-                revocation_list = revocation_repo.reserve_revocation_index()
-            credential_offer_entity = credential_offer_repo.create(
-                data_agreement_id=data_agreement_model.id,
-                data_attribute_values=data_attribute_values
-                if data_attribute_values
-                else None,
-                issuance_mode=issuance_mode.value,
-                is_pre_authorised=is_pre_authorised,
-                user_pin=user_pin,
-                client_id=client_id,
-                credential_status=CredentialStatuses.Ready.value
-                if data_attribute_values
-                else CredentialStatuses.Pending.value,
-                supports_revocation=supports_revocation,
-                is_revoked=False,
-                credential_revocation_status_list_index=revocation_list.last_assigned_index
-                if supports_revocation
-                else -1,
-                credential_revocation_status_list_id=revocation_list.id
-                if supports_revocation
-                else None,
-                trust_framework=trust_framework.value if trust_framework else None,
-            )
-
-            if is_pre_authorised:
-                pre_authorised_code = IssuerService.create_pre_authorised_code(
-                    iss=self.key_did.did,
-                    aud=self.key_did.did,
-                    sub=self.key_did.did,
-                    iat=iat,
-                    nbf=iat,
-                    exp=exp,
-                    kid=f"{self.key_did.did}#{self.key_did._method_specific_id}",
-                    key=self.key_did._key,
-                    credential_offer_id=str(credential_offer_entity.id),
-                )
-
-                credential_offer_entity = credential_offer_repo.update(
-                    id=credential_offer_entity.id,
-                    pre_authorised_code=pre_authorised_code,
-                )
-            else:
-                issuer_state = IssuerService.create_issuer_state(
-                    iss=self.key_did.did,
-                    aud=self.key_did.did,
-                    sub=self.key_did.did,
-                    iat=iat,
-                    nbf=iat,
-                    exp=exp,
-                    kid=f"{self.key_did.did}#{self.key_did._method_specific_id}",
-                    key=self.key_did._key,
-                    credential_offer_id=str(credential_offer_entity.id),
-                )
-
-                credential_offer_entity = credential_offer_repo.update(
-                    id=credential_offer_entity.id, issuer_state=issuer_state
-                )
         return credential_offer_entity.to_dict()
 
     async def delete_credential_offer(self, credential_offer_id: str) -> bool:
@@ -2593,29 +2746,33 @@ class OrganisationService:
         vc = vc_in_vp_decoded.claims.get("vc")
 
         valid_from = vc.get("validFrom")
-        valid_from = datetime.strptime(valid_from, "%Y-%m-%dT%H:%M:%SZ")
         expiration_date = vc.get("expirationDate")
-        expiration_date = datetime.strptime(expiration_date, "%Y-%m-%dT%H:%M:%SZ")
+        if valid_from and expiration_date:
+            valid_from = datetime.strptime(valid_from, "%Y-%m-%dT%H:%M:%SZ")
+            expiration_date = datetime.strptime(expiration_date, "%Y-%m-%dT%H:%M:%SZ")
+            current_datetime_utc = datetime.utcnow()
 
-        current_datetime_utc = datetime.utcnow()
+            if current_datetime_utc > expiration_date:
+                error = "invalid_request"
+                descriptor_id = presentation_submission.get("descriptor_map")[0].get(
+                    "id"
+                )
+                error_description = "The verifiable credential is expired"
+                return (
+                    f"{redirect_uri}?error={error}&error_description={error_description}&state={state}",
+                    False,
+                )
 
-        if current_datetime_utc > expiration_date:
-            error = "invalid_request"
-            descriptor_id = presentation_submission.get("descriptor_map")[0].get("id")
-            error_description = f"{descriptor_id} is expired"
-            return (
-                f"{redirect_uri}?error={error}&error_description={error_description}&state={state}",
-                False,
-            )
-
-        if current_datetime_utc < valid_from:
-            error = "invalid_request"
-            descriptor_id = presentation_submission.get("descriptor_map")[0].get("id")
-            error_description = f"{descriptor_id} is not yet valid"
-            return (
-                f"{redirect_uri}?error={error}&error_description={error_description}&state={state}",
-                False,
-            )
+            if current_datetime_utc < valid_from:
+                error = "invalid_request"
+                descriptor_id = presentation_submission.get("descriptor_map")[0].get(
+                    "id"
+                )
+                error_description = f"{descriptor_id} is not yet valid"
+                return (
+                    f"{redirect_uri}?error={error}&error_description={error_description}&state={state}",
+                    False,
+                )
 
         if vc.get("credentialStatus"):
             # FIXME: Fetch status list and verify the credential status.
@@ -2667,6 +2824,30 @@ class OrganisationService:
                 if not is_verified:
                     # Redirects back with error and error_description in query params.
                     return redirect_url
+                vp_token_decoded = decode_header_and_claims_in_jwt(vp_token_response)
+                vp = vp_token_decoded.claims.get("vp")
+                if vp:
+                    vcs = vp.get("verifiableCredential")
+                    if vcs:
+                        decoded = []
+                        for embedded_vc in vcs:
+                            embedded_vc_decoded = decode_header_and_claims_in_jwt(
+                                embedded_vc
+                            )
+                            decoded.append(embedded_vc_decoded.claims.get("vc"))
+                            data_agreement: DataAgreementModel = (
+                                credential_offer_entity.data_agreement
+                            )
+                            if (
+                                embedded_vc_decoded.claims.get("vc").get("type")[-1]
+                                != data_agreement.credential_types[-1]
+                            ):
+                                raise InvalidStateInIDTokenResponseError(
+                                    "Invalid presentation"
+                                )
+                credential_offer_entity = repo.update(
+                    id=credential_offer_entity.id, vp_token_response=json.dumps(decoded)
+                )
 
             if credential_offer_entity.is_pre_authorised:
                 raise CredentialOfferIsPreAuthorizedError(
@@ -2681,8 +2862,16 @@ class OrganisationService:
                 authorisation_code=authorisation_code,
                 authorisation_code_state=authorisation_code_state,
             )
-
-            redirect_url = f"{credential_offer_entity.redirect_uri}?code={authorisation_code}&state={credential_offer_entity.authorisation_request_state}"
+            redirect_base_uri = (
+                credential_offer_entity.redirect_uri
+                if credential_offer_entity.redirect_uri
+                else "openid://"
+            )
+            redirect_url = f"{redirect_base_uri}?code={authorisation_code}"
+            if credential_offer_entity.authorisation_request_state:
+                redirect_url += (
+                    f"&state={credential_offer_entity.authorisation_request_state}"
+                )
             return redirect_url
 
     async def create_access_token(
@@ -2782,6 +2971,16 @@ class OrganisationService:
             )
             return token_response.to_dict()
 
+    async def get_verifiable_presentation_request_by_reference(
+        self,
+        credential_offer_id: str,
+    ) -> str:
+        # https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#section-4.1.3
+
+        with self.credential_offer_repository as repo:
+            credential_offer_entity = repo.get_by_id(credential_offer_id)
+            return credential_offer_entity.vp_token_request
+
     async def get_credential_offer_by_reference_using_credential_offer_uri(
         self,
         credential_offer_id: str,
@@ -2821,8 +3020,8 @@ class OrganisationService:
                 }
             else:
                 credential_offer_by_reference["grants"] = {
-                    AuthorisationGrants.PreAuthorisedCode.value.grant_type: {
-                        AuthorisationGrants.PreAuthorisedCode.value.grant_data: credential_offer_entity.issuer_state
+                    AuthorisationGrants.AuthorisationCode.value.grant_type: {
+                        AuthorisationGrants.AuthorisationCode.value.grant_data: credential_offer_entity.issuer_state
                     }
                 }
             return credential_offer_by_reference

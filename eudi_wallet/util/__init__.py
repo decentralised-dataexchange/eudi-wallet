@@ -97,6 +97,7 @@ async def http_call(url, method, data=None, headers=None):
     """
     async with aiohttp.ClientSession(headers=headers) as session:
         async with session.request(method, url, data=data) as resp:
+            print(await resp.text())
             return await resp.json()
 
 

@@ -1,6 +1,6 @@
 import uuid
 from logging import Logger
-from typing import List, Optional, Union, Callable
+from typing import Callable, List, Optional, Union
 
 from sqlalchemy import exc
 from sqlalchemy.orm import Session
@@ -20,8 +20,8 @@ class SqlAlchemyCredentialOfferRepository:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        assert self.session is not None
-        assert self.logger is not None
+        assert self.session is not None, "DB session not available"
+        assert self.logger is not None, "Logger not available"
         if exc_tb is not None:
             self.session.rollback()
             self.logger.error(f"Exception occurred: {exc_type}, {exc_val}")

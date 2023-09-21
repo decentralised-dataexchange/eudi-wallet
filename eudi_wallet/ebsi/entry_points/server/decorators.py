@@ -90,7 +90,7 @@ def inject_request_context(raise_exception_if_legal_entity_not_found: bool = Tru
                     raise web.HTTPBadRequest(text="Legal entity not found")
                 else:
                     await legal_entity_service.set_cryptographic_seed(
-                            crypto_seed=legal_entity_entity.cryptographic_seed # type: ignore
+                        crypto_seed=legal_entity_entity.cryptographic_seed  # type: ignore
                     )
                     await legal_entity_service.set_entity(
                         legal_entity_entity=legal_entity_entity
