@@ -1389,7 +1389,10 @@ class OrganisationService:
             kid = f"{self.key_did.did}#{self.key_did._method_specific_id}"
             jti = credential_id
             iss = self.key_did.did
-            sub = credential_offer_entity.client_id
+            if credential_offer_entity.client_id:
+                sub = credential_offer_entity.client_id
+            else:
+                sub = ""
             to_be_issued_credential = self._create_credential_token(
                 credential_id=credential_id,
                 credential_type=credential_type,
@@ -2570,10 +2573,10 @@ class OrganisationService:
                     "User pin is required for pre-authorised credential offers"
                 )
 
-            if is_pre_authorised and not client_id:
-                raise ClientIdRequiredError(
-                    "Client id is required for pre-authorised credential offers"
-                )
+            # if is_pre_authorised and not client_id:
+            #     raise ClientIdRequiredError(
+            #         "Client id is required for pre-authorised credential offers"
+            #     )
 
             if (
                 issuance_mode.value == CredentialIssuanceModes.InTime
