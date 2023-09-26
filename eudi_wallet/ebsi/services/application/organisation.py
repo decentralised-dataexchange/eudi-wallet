@@ -1313,9 +1313,9 @@ class OrganisationService:
         credential_status: Optional[dict] = None,
         terms_of_use: Optional[Union[dict, List[dict]]] = None,
     ) -> str:
-        seconds_in_5_minutes = 300
+        expiry_in_seconds = 3600
         iss_in_epoch, issuance_date = generate_ISO8601_UTC()
-        exp_in_epoch, expiration_date = generate_ISO8601_UTC(seconds_in_5_minutes)
+        exp_in_epoch, expiration_date = generate_ISO8601_UTC(expiry_in_seconds)
         vc = {
             "@context": credential_context,
             "id": credential_id,
