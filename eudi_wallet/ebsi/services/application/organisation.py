@@ -3017,9 +3017,9 @@ class OrganisationService:
             if credential_offer_entity.is_pre_authorised:
                 credential_offer_by_reference["grants"] = {
                     AuthorisationGrants.PreAuthorisedCode.value.grant_type: {
-                        AuthorisationGrants.PreAuthorisedCode.value.grant_data: credential_offer_entity.pre_authorised_code
+                        AuthorisationGrants.PreAuthorisedCode.value.grant_data: credential_offer_entity.pre_authorised_code,
+                        "user_pin_required": True,
                     },
-                    "user_pin_required": True,
                 }
             else:
                 credential_offer_by_reference["grants"] = {
