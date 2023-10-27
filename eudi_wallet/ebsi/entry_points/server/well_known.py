@@ -9,13 +9,18 @@ def get_well_known_openid_credential_issuer_config(wallet_domain: str):
         "credential_endpoint": f"{wallet_domain}/credential",
         "deferred_credential_endpoint": f"{wallet_domain}/credential_deferred",
         "display": {
-            "name": "iGrant.io - EBSI Wallet",
+            "name": "Inspecting Org",
+            "location": "Sweden",
             "locale": "en-GB",
-            "logo": {
-                "url": "https://demo-api.igrant.io/v1/organizations/5c1509c75430460001af6232/image/5c150a315430460001af6234/web",
-                "alt_text": "iGrant.io - EBSI Wallet",
+            "cover": {
+                "url": "https://storage.googleapis.com/data4diabetes/cover.jpeg",
+                "alt_text": "Inspecting Org",
             },
-            "description": "iGrant.io is a data exchange platform that helps organisations to access personal data in a sustainable and human-centric manner.",
+            "logo": {
+                "url": "https://storage.googleapis.com/data4diabetes/sweden.jpg",
+                "alt_text": "Inspecting Org",
+            },
+            "description": "For queries about how we are managing your data please contact the Data Protection Officer.",
         },
         "credentials_supported": [
             {
@@ -30,9 +35,7 @@ def get_well_known_openid_credential_issuer_config(wallet_domain: str):
                     "type": "Accreditation",
                     "uri": "TIR link towards accreditation",
                 },
-                "display": [
-                    {"name": "Conformance tests deferred", "locale": "en-GB"}
-                ],
+                "display": [{"name": "Conformance tests deferred", "locale": "en-GB"}],
             },
             {
                 "format": "jwt_vc",
@@ -62,9 +65,7 @@ def get_well_known_openid_credential_issuer_config(wallet_domain: str):
                     "type": "Accreditation",
                     "uri": "TIR link towards accreditation",
                 },
-                "display": [
-                    {"name": "Conformance tests in-time", "locale": "en-GB"}
-                ],
+                "display": [{"name": "Conformance tests in-time", "locale": "en-GB"}],
             },
             {
                 "format": "jwt_vc",
