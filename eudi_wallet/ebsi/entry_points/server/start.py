@@ -166,12 +166,12 @@ def main(
     level: int = getattr(logging, log_level.upper())
     logger = AppLogger(__name__, level=level).logger
 
-    if debug:
-        logger.debug(f"Starting debugger on {debug_host}:{debug_port}")
-        debugpy.listen((debug_host, debug_port))
-        logger.debug("Waiting for debugger to attach...")
-        debugpy.wait_for_client()
-        logger.debug("Debugger attached!")
+    # if debug:
+    #     logger.debug(f"Starting debugger on {debug_host}:{debug_port}")
+    #     debugpy.listen((debug_host, debug_port))
+    #     logger.debug("Waiting for debugger to attach...")
+    #     debugpy.wait_for_client()
+    #     logger.debug("Debugger attached!")
 
     database_url = f"postgresql+psycopg2://{database_user}:{database_password}@{database_host}:{database_port}/{database_db}"
     db_session = DBSetup(database_url).setup_db()
@@ -179,16 +179,16 @@ def main(
     loop = asyncio.get_event_loop()
 
     producer: Optional[AIOKafkaProducer] = None
-    try:
-        if kafka_broker_address:
-            producer = AIOKafkaProducer(
-                bootstrap_servers=kafka_broker_address, loop=loop
-            )
-            loop.run_until_complete(producer.start())
-    except KafkaConnectionError as e:
-        logger.error(f"Unable to connect to Kafka broker: {e}")
+    # try:
+    #     if kafka_broker_address:
+    #         producer = AIOKafkaProducer(
+    #             bootstrap_servers=kafka_broker_address, loop=loop
+    #         )
+    #         loop.run_until_complete(producer.start())
+    # except KafkaConnectionError as e:
+    #     logger.error(f"Unable to connect to Kafka broker: {e}")
 
-    assert producer is not None
+    # assert producer is not None
 
     server = ServerSetup(
         db_session, producer, logger, kafka_topic, ngrok_subdomain, debug
@@ -197,17 +197,17 @@ def main(
     runner, site = loop.run_until_complete(server.start_server(port))
 
     # Only set up ngrok if auth token is provided
-    ngrok_tunnel = None
-    tunnel: Optional[ngrok.NgrokTunnel] = None
-    if ngrok_auth_token:
-        ngrok_tunnel = NgrokSetup(ngrok_auth_token)
-        try:
-            tunnel = ngrok_tunnel.configure_ngrok(port, ngrok_subdomain)
-            logger.info(f"ngrok tunnel URL: {tunnel.public_url}")
-        except Exception as e:
-            logger.error(f"Error while setting up ngrok: {e}")
-    else:
-        logger.info("Starting without ngrok...")
+    # ngrok_tunnel = None
+    # tunnel: Optional[ngrok.NgrokTunnel] = None
+    # if ngrok_auth_token:
+    #     ngrok_tunnel = NgrokSetup(ngrok_auth_token)
+    #     try:
+    #         tunnel = ngrok_tunnel.configure_ngrok(port, ngrok_subdomain)
+    #         logger.info(f"ngrok tunnel URL: {tunnel.public_url}")
+    #     except Exception as e:
+    #         logger.error(f"Error while setting up ngrok: {e}")
+    # else:
+    #     logger.info("Starting without ngrok...")
 
     try:
         loop.run_forever()
@@ -221,9 +221,9 @@ def main(
         loop.run_until_complete(producer.stop())
         loop.close()
 
-        if ngrok_tunnel and "tunnel" in locals():
-            ngrok.disconnect(tunnel.public_url)
-            ngrok.kill()
+        # if ngrok_tunnel and "tunnel" in locals():
+        #     ngrok.disconnect(tunnel.public_url)
+        #     ngrok.kill()
 
 
 if __name__ == "__main__":

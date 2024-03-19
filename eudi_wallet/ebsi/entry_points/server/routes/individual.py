@@ -141,12 +141,12 @@ async def handle_get_onboard_trusted_issuer(request: Request, context: RequestCo
         event_wrapper = EventWrapper(
             event_type=EventTypes.OnboardTrustedIssuer.value, payload=event.to_dict()
         )
-        await produce(
-            message=event_wrapper.to_json(),
-            topic=context.app_context.kafka_topic,
-            producer=context.app_context.kafka_producer,
-            logger=context.app_context.logger,
-        )
+        # await produce(
+        #     message=event_wrapper.to_json(),
+        #     topic=context.app_context.kafka_topic,
+        #     producer=context.app_context.kafka_producer,
+        #     logger=context.app_context.logger,
+        # )
         return web.json_response(
             {
                 "is_onboarding_as_ti_in_progress": legal_entity_entity.is_onboarding_as_ti_in_progress,
@@ -200,12 +200,12 @@ async def handle_get_onboard_trusted_accreditation_organisation(
             event_type=EventTypes.OnboardTrustedAccreditationOrganisation.value,
             payload=event.to_dict(),
         )
-        await produce(
-            message=event_wrapper.to_json(),
-            topic=context.app_context.kafka_topic,
-            producer=context.app_context.kafka_producer,
-            logger=context.app_context.logger,
-        )
+        # await produce(
+        #     message=event_wrapper.to_json(),
+        #     topic=context.app_context.kafka_topic,
+        #     producer=context.app_context.kafka_producer,
+        #     logger=context.app_context.logger,
+        # )
         return web.json_response(
             {
                 "is_onboarding_as_tao_in_progress": legal_entity_entity.is_onboarding_as_tao_in_progress,
@@ -260,12 +260,12 @@ async def handle_get_onboard_root_trusted_accreditation_organisation(
             event_type=EventTypes.OnboardRootTrustedAccreditationOrganisation.value,
             payload=event.to_dict(),
         )
-        await produce(
-            message=event_wrapper.to_json(),
-            topic=context.app_context.kafka_topic,
-            producer=context.app_context.kafka_producer,
-            logger=context.app_context.logger,
-        )
+        # await produce(
+        #     message=event_wrapper.to_json(),
+        #     topic=context.app_context.kafka_topic,
+        #     producer=context.app_context.kafka_producer,
+        #     logger=context.app_context.logger,
+        # )
         return web.json_response(
             {
                 "is_onboarding_as_root_tao_in_progress": legal_entity_entity.is_onboarding_as_root_tao_in_progress,
