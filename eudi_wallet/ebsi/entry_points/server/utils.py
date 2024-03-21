@@ -3,7 +3,6 @@ import typing
 from logging import Logger
 
 from aiokafka import AIOKafkaProducer
-from sqlalchemy.orm import Session
 
 from eudi_wallet.ebsi.value_objects.domain.discovery import (
     OpenIDAuthServerConfig,
