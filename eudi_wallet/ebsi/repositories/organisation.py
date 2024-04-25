@@ -86,3 +86,16 @@ class SqlAlchemyOrganisationRepository:
         self.session.commit()
         self.session.refresh(legal_entity)
         return legal_entity
+    
+    def get_by_id(self, id: str) -> Union[OrganisationModel, None]:
+        assert self.session is not None
+        assert self.logger is not None
+        try:
+            return (
+                self.session.query(OrganisationModel)
+                .filter(OrganisationModel.id == id)
+                .one()
+            )
+        except exc.NoResultFound:
+            self.logger.debug(f"No legal entity found with id {id}")
+            return None

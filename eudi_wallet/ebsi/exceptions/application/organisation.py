@@ -72,3 +72,19 @@ class OnboardingToTrustedIssuersRegistryError(OnboardingToEBSIError):
 
 class CreateDataAgreementUsecaseError(Exception):
     pass
+
+
+class UpdateDataAgreementUsecaseError(Exception):
+    pass
+
+
+class IssueCredentialError(Exception):
+    pass
+
+
+class LegalEntityNotFoundError(Exception):
+    pass
+
+
+class CredentialOfferAccessedError(Exception):
+    pass

@@ -12,3 +12,9 @@ def import_models():
     )
     from eudi_wallet.ebsi.models.data_agreement import DataAgreementModel  # noqa: F401
     from eudi_wallet.ebsi.models.organisation import OrganisationModel  # noqa: F401
+    from eudi_wallet.ebsi.models.v2.data_agreement import (
+        V2DataAgreementModel,
+    )  # noqa: F401
+    from eudi_wallet.ebsi.models.v2.issue_credential_record import (
+        IssueCredentialRecordModel,
+    )  # noqa: F401

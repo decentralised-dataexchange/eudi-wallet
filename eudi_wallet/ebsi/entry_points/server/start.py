@@ -18,6 +18,8 @@ from eudi_wallet.ebsi.entry_points.server.middlewares import (
 )
 from eudi_wallet.ebsi.entry_points.server.routes.individual import individual_routes
 from eudi_wallet.ebsi.entry_points.server.routes.organisation import organisation_routes
+from eudi_wallet.ebsi.entry_points.server.routes.v2.config import config_routes
+from eudi_wallet.ebsi.entry_points.server.routes.v2.service import service_routes
 from eudi_wallet.ebsi.entry_points.server.startup import app_startup
 from eudi_wallet.ebsi.models.base import Base, import_models
 
@@ -74,17 +76,20 @@ class ServerSetup:
         kafka_topic: str,
         subdomain: str,
         debug: bool,
+        add_route: str = None,
     ):
         self.db_session = db_session
         self.producer = producer
         self.logger = logger
         self.kafka_topic = kafka_topic
         self.subdomain = subdomain
+        self.add_route = add_route
 
         if debug:
-            self.domain = f"https://{self.subdomain}.ngrok.io"
+            self.domain = f"http://{self.subdomain}.taile165a.ts.net:8080"
         else:
             self.domain = f"https://{self.subdomain}.igrant.io"
+
 
     async def start_server(self, port: int):
         app = web.Application(middlewares=[error_middleware, logging_middleware])
@@ -97,10 +102,20 @@ class ServerSetup:
 
         # Add startup functions
         app.on_startup.append(app_startup)
-
+        
         # Add routes
+        if self.add_route == "config":
+            app.add_routes(config_routes)
+        elif self.add_route == "service":
+            app.add_routes(service_routes)
+        else:
+            app.add_routes(config_routes)
+            app.add_routes(service_routes)
+
         app.add_routes(individual_routes)
         app.add_routes(organisation_routes)
+        
+        
         app.add_routes([web.route("*", "/{tail:.*}", handle_404, name="handle_404")])
 
         runner = web.AppRunner(app)
@@ -147,6 +162,7 @@ class ServerSetup:
 @click.option("--database-host", envvar="DATABASE_HOST")
 @click.option("--database-port", envvar="DATABASE_PORT")
 @click.option("--database-db", envvar="DATABASE_DB")
+@click.option("--add-route", envvar="ROUTE_PERMITTED")
 def main(
     port,
     ngrok_auth_token,
@@ -162,6 +178,7 @@ def main(
     database_host,
     database_port,
     database_db,
+    add_route,
 ):
     level: int = getattr(logging, log_level.upper())
     logger = AppLogger(__name__, level=level).logger
@@ -191,7 +208,7 @@ def main(
     # assert producer is not None
 
     server = ServerSetup(
-        db_session, producer, logger, kafka_topic, ngrok_subdomain, debug
+        db_session, producer, logger, kafka_topic, ngrok_subdomain, debug, add_route
     )
 
     runner, site = loop.run_until_complete(server.start_server(port))

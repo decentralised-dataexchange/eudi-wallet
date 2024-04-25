@@ -41,6 +41,13 @@ class CredentialStatuses(Enum):
     Pending = "pending"
 
 
+class CredentialOfferStatuses(Enum):
+    OfferSent = "offer_send"
+    OfferReceived = "offer_received"
+    CredentialIssued = "credential_issued"
+    CredentialAcknowledged = "credential_ack"
+
+
 @dataclass
 class AcceptanceTokenResponse(DataClassJsonMixin):
     acceptance_token: typing.Optional[str] = None
@@ -173,6 +180,7 @@ class CredentialRequest(DataClassJsonMixin):
     format: str
     types: typing.List[str]
     proof: CredentialRequestProof
+
 
 @dataclass
 class VATCCredentialSubject(DataClassJsonMixin):

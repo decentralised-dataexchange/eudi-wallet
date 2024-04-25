@@ -23,14 +23,23 @@ class OrganisationModel(Base):
         back_populates="organisation",
         cascade="all,delete-orphan",
     )
+    v2_data_agreements = relationship(
+        "V2DataAgreementModel",
+        back_populates="organisation",
+        cascade="all,delete-orphan",
+    )
     name = Column(String(length=100), nullable=False)
     description = Column(String(length=500), nullable=True)
     logo_url = Column(Text, nullable=True)
     cryptographic_seed = Column(String(length=500), nullable=False)
     role = Column(String(length=200), nullable=False)
+    location = Column(String(length=100), nullable=True)
+    cover_image_url = Column(Text, nullable=True)
+    webhook_url = Column(Text, nullable=True)
 
     is_did_in_registry = Column(Boolean, default=False)
 
+    # FIXME: Need to understand about this fields
     is_onboarding_as_ti_in_progress = Column(Boolean, default=False)
     is_onboarded_as_ti = Column(Boolean, default=False)
 
