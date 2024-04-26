@@ -13,7 +13,7 @@ DEPLOY_VERSION = $(shell test -f $(DEPLOY_VERSION_FILE) && cat $(DEPLOY_VERSION_
 # Settings for server
 # Ngrok is only required if needs to expose wallet to internet during development
 NGROK_AUTH_TOKEN ?= 
-NGROK_SUBDOMAIN ?= 
+DOMAIN ?= 
 
 # Kafka settings is mandatory
 KAFKA_TOPIC ?= ebsi
@@ -40,25 +40,49 @@ help: ## Print a help message.
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}'
 
-build-base: ## Build the base container image.
+build: ## Build the base container image.
 	$(eval DOCKER_TAG=$(shell date +%Y%m%d%H%M%S)-$(if $(GIT_TAG),$(GIT_TAG),$(if $(GIT_COMMIT),$(GIT_COMMIT),latest)))
 	@echo "Building Docker image with tag: $(DOCKER_TAG)"
 	docker build -f ./resources/docker/server/Dockerfile -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 	echo "$(DOCKER_IMAGE):$(DOCKER_TAG)" > $(DEPLOY_VERSION_FILE)
 
-run-server: ## Run the server
+run-config: ## Run the server
 	$(eval DOCKER_TAG=$(shell cat deploy_version))
 	@echo "Running Docker container with image: $(DOCKER_TAG)"
 	docker run \
-	-e "NGROK_AUTH_TOKEN=$(NGROK_AUTH_TOKEN)" \
-	-e "NGROK_SUBDOMAIN=$(NGROK_SUBDOMAIN)" \
-	-e "KAFKA_BROKER_ADDRESS=$(KAFKA_BROKER_ADDRESS)" \
-	-e "KAFKA_TOPIC=$(KAFKA_TOPIC)" \
+	--name eudiwallet-config \
+	-e "ROUTE_PERMITTED=config" \
+	-e "PORT=9000" \
+	-e "DOMAIN=$(DOMAIN)" \
 	-e "DEBUG=$(DEBUG)" \
 	-e "DEBUG_HOST=$(DEBUG_HOST)" \
 	-e "DEBUG_PORT=$(DEBUG_PORT)" \
+	-e DATABASE_USER=$(PG_USER) \
+	-e DATABASE_PASSWORD=$(PG_PASSWORD) \
+	-e DATABASE_HOST=$(PG_CONTAINER_NAME) \
+	-e DATABASE_PORT=$(PG_PORT) \
+	-e DATABASE_DB=$(PG_DB) \
+	-p 8080:9000 \
+	--link=$(PG_CONTAINER_NAME) \
+	$(DOCKER_TAG)
+
+run-service: ## Run the server
+	$(eval DOCKER_TAG=$(shell cat deploy_version))
+	@echo "Running Docker container with image: $(DOCKER_TAG)"
+	docker run \
+	--name eudiwallet-service \
+	-e "PORT=9000" \
+	-e "ROUTE_PERMITTED=service" \
+	-e "DOMAIN=$(DOMAIN)" \
+	-e "DEBUG=$(DEBUG)" \
+	-e "DEBUG_HOST=$(DEBUG_HOST)" \
+	-e "DEBUG_PORT=$(DEBUG_PORT)" \
+	-e DATABASE_USER=$(PG_USER) \
+	-e DATABASE_PASSWORD=$(PG_PASSWORD) \
+	-e DATABASE_HOST=$(PG_CONTAINER_NAME) \
+	-e DATABASE_PORT=$(PG_PORT) \
+	-e DATABASE_DB=$(PG_DB) \
 	-p 9000:9000 \
-	--link=broker \
 	--link=$(PG_CONTAINER_NAME) \
 	$(DOCKER_TAG)
 
@@ -72,6 +96,14 @@ run-db: ## Start the PostgreSQL database
 	-p $(PG_PORT):5432 \
 	-v $(PG_VOLUME):/var/lib/postgresql/data \
 	$(PG_IMAGE)
+
+stop-config: ## Stop the config server
+	@echo "Stopping config server..."
+	docker stop eudiwallet-config && docker rm eudiwallet-config
+
+stop-service: ## Stop the service server
+	@echo "Stopping service server..."
+	docker stop eudiwallet-service && docker rm eudiwallet-service
 
 stop-db: ## Stop the PostgreSQL database
 	@echo "Stopping PostgreSQL database..."
