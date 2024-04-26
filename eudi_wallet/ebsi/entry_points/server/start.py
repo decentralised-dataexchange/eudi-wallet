@@ -73,29 +73,21 @@ class ServerSetup:
         db_session: object,
         producer: object,
         logger: logging.Logger,
-        kafka_topic: str,
-        subdomain: str,
+        domain: str,
         debug: bool,
         add_route: str = None,
     ):
         self.db_session = db_session
         self.producer = producer
         self.logger = logger
-        self.kafka_topic = kafka_topic
-        self.subdomain = subdomain
+        self.domain = domain
         self.add_route = add_route
-
-        if debug:
-            self.domain = f"http://{self.subdomain}.taile165a.ts.net:8080"
-        else:
-            self.domain = f"https://{self.subdomain}.igrant.io"
-
 
     async def start_server(self, port: int):
         app = web.Application(middlewares=[error_middleware, logging_middleware])
 
-        app["kafka_producer"] = self.producer
-        app["kafka_topic"] = self.kafka_topic
+        # app["kafka_producer"] = self.producer
+        # app["kafka_topic"] = self.kafka_topic
         app["logger"] = self.logger
         app["db_session"] = self.db_session
         app["domain"] = self.domain
@@ -114,8 +106,7 @@ class ServerSetup:
 
         app.add_routes(individual_routes)
         app.add_routes(organisation_routes)
-        
-        
+
         app.add_routes([web.route("*", "/{tail:.*}", handle_404, name="handle_404")])
 
         runner = web.AppRunner(app)
@@ -133,10 +124,7 @@ class ServerSetup:
 
 @click.command()
 @click.option("--port", envvar="PORT", default=8080)
-@click.option("--ngrok-auth-token", envvar="NGROK_AUTH_TOKEN")
-@click.option("--ngrok-subdomain", envvar="NGROK_SUBDOMAIN")
-@click.option("--kafka-broker-address", envvar="KAFKA_BROKER_ADDRESS")
-@click.option("--kafka-topic", envvar="KAFKA_TOPIC")
+@click.option("--domain", envvar="DOMAIN")
 @click.option(
     "--log-level",
     default="DEBUG",
@@ -165,10 +153,7 @@ class ServerSetup:
 @click.option("--add-route", envvar="ROUTE_PERMITTED")
 def main(
     port,
-    ngrok_auth_token,
-    ngrok_subdomain,
-    kafka_broker_address,
-    kafka_topic,
+    domain,
     log_level,
     debug,
     debug_host,
@@ -208,7 +193,7 @@ def main(
     # assert producer is not None
 
     server = ServerSetup(
-        db_session, producer, logger, kafka_topic, ngrok_subdomain, debug, add_route
+        db_session, producer, logger, domain, debug, add_route
     )
 
     runner, site = loop.run_until_complete(server.start_server(port))

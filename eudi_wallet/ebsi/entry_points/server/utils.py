@@ -28,8 +28,8 @@ def get_app_context(app) -> AppContext:
         credential_issuer_configuration=app["credential_issuer_configuration"],
         auth_server_configuration=app["auth_server_configuration"],
         logger=app["logger"],
-        kafka_producer=app["kafka_producer"],
-        kafka_topic=app["kafka_topic"],
+        kafka_producer=None,
+        kafka_topic=None,
         db_session=app["db_session"],
         domain=app["domain"],
     )
