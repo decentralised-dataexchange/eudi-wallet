@@ -121,4 +121,8 @@ destroy-db-volume: ## Destroy Docker volume and all associated data
 publish: $(DEPLOY_VERSION_FILE) ## Publish latest production Docker image to docker hub
 	docker push $(DEPLOY_VERSION)
 
+deploy: $(DEPLOY_VERSION_FILE) ## Deploy to K8s cluster (e.g. make deploy/{preview,staging,production})
+	kubectl set image deployment/config-ew config-ew=$(DEPLOY_VERSION) -n eudiwallet
+	kubectl set image deployment/service-ew service-ew=$(DEPLOY_VERSION) -n eudiwallet
+
 .DEFAULT_GOAL := help
