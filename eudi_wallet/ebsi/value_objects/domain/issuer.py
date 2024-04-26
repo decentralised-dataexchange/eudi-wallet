@@ -45,7 +45,7 @@ class CredentialOfferStatuses(Enum):
     OfferSent = "offer_send"
     OfferReceived = "offer_received"
     CredentialIssued = "credential_issued"
-    CredentialAcknowledged = "credential_ack"
+    CredentialAcknowledged = "credential_acked"
 
 
 @dataclass
