@@ -167,3 +167,4 @@ wallet.db
 jsonschema_tests.py
 deploy_version
 resources/kubernetes/
+.envrc_backup
