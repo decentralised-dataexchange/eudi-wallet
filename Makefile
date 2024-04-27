@@ -46,6 +46,25 @@ build: ## Build the base container image.
 	docker build -f ./resources/docker/server/Dockerfile -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
 	echo "$(DOCKER_IMAGE):$(DOCKER_TAG)" > $(DEPLOY_VERSION_FILE)
 
+run: ## Run the server
+	$(eval DOCKER_TAG=$(shell cat deploy_version))
+	@echo "Running Docker container with image: $(DOCKER_TAG)"
+	docker run \
+	--name eudiwallet \
+	-e "PORT=9000" \
+	-e "DOMAIN=$(DOMAIN)" \
+	-e "DEBUG=$(DEBUG)" \
+	-e "DEBUG_HOST=$(DEBUG_HOST)" \
+	-e "DEBUG_PORT=$(DEBUG_PORT)" \
+	-e DATABASE_USER=$(PG_USER) \
+	-e DATABASE_PASSWORD=$(PG_PASSWORD) \
+	-e DATABASE_HOST=$(PG_CONTAINER_NAME) \
+	-e DATABASE_PORT=$(PG_PORT) \
+	-e DATABASE_DB=$(PG_DB) \
+	-p 9000:9000 \
+	--link=$(PG_CONTAINER_NAME) \
+	$(DOCKER_TAG)
+
 run-config: ## Run the server
 	$(eval DOCKER_TAG=$(shell cat deploy_version))
 	@echo "Running Docker container with image: $(DOCKER_TAG)"
@@ -93,7 +112,7 @@ run-db: ## Start the PostgreSQL database
 	-e POSTGRES_USER=$(PG_USER) \
 	-e POSTGRES_PASSWORD=$(PG_PASSWORD) \
 	-e POSTGRES_DB=$(PG_DB) \
-	-p $(PG_PORT):5432 \
+	-p 5442:$(PG_PORT) \
 	-v $(PG_VOLUME):/var/lib/postgresql/data \
 	$(PG_IMAGE)
 
@@ -104,6 +123,10 @@ stop-config: ## Stop the config server
 stop-service: ## Stop the service server
 	@echo "Stopping service server..."
 	docker stop eudiwallet-service && docker rm eudiwallet-service
+
+stop: ## Stop the server
+	@echo "Stopping server..."
+	docker stop eudiwallet && docker rm eudiwallet
 
 stop-db: ## Stop the PostgreSQL database
 	@echo "Stopping PostgreSQL database..."
