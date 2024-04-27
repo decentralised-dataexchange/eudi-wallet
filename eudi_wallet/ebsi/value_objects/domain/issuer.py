@@ -42,7 +42,7 @@ class CredentialStatuses(Enum):
 
 
 class CredentialOfferStatuses(Enum):
-    OfferSent = "offer_send"
+    OfferSent = "offer_sent"
     OfferReceived = "offer_received"
     CredentialIssued = "credential_issued"
     CredentialAcknowledged = "credential_acked"
