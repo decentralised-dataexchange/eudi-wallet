@@ -31,11 +31,12 @@ tenacity = "^8.2.2"
 httpx = "^0.24.1"
 mnemonic = "^0.20"
 psycopg2-binary = "^2.9.7"
-jsonpath-ng = "^1.5.3"
+jsonpath-ng = "^1.6.1"
 setuptools = "^68.2.0"
 web3 = "^6.9.0"
 pip = "^23.2.1"
-sdjwt = {git = "https://github.com/decentralised-dataexchange/sd-jwt-playground.git", rev = "2024.4.1"}
+sdjwt = {git = "https://github.com/decentralised-dataexchange/sd-jwt-playground.git", rev = "2024.4.2"}
+alembic = "^1.13.1"
 
 [tool.poetry.dev-dependencies]
 jupyter = "^1.0.0"

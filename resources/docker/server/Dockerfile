@@ -24,4 +24,4 @@ RUN poetry config virtualenvs.create false \
 # Copy all project
 COPY . /app
 
-CMD ["/bin/sh", "-c", "poetry run start-server"]
+CMD ["/bin/sh", "-c", "alembic upgrade head && poetry run start-server"]

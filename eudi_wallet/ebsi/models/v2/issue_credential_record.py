@@ -62,6 +62,8 @@ class IssueCredentialRecordModel(Base):
     status = Column(String, nullable=False)
     isAccessed = Column(Boolean, default=False)
 
+    limitedDisclosure = Column(Boolean, default=True, nullable=False, server_default="True")
+
     createdAt = Column(DateTime, default=datetime.datetime.utcnow)
     updatedAt = Column(
         DateTime, default=datetime.datetime.utcnow, onupdate=datetime.datetime.utcnow

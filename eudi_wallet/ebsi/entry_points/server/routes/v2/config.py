@@ -454,6 +454,7 @@ class CreateDataSourceIssueCredentialReq(BaseModel):
         constr(min_length=4, max_length=4, pattern="^[0-9]{4}$", strip_whitespace=True)  # type: ignore
     ] = None
     dataAgreementId: constr(min_length=3, strip_whitespace=True)  # type: ignore
+    limitedDisclosure: Optional[bool] = None
 
 
 @config_routes.post(
@@ -510,6 +511,11 @@ async def handle_post_issue_credential(request: Request, context: V2RequestConte
                     is_pre_authorised=issue_credential_req.isPreAuthorised,
                     user_pin=issue_credential_req.userPin,
                     organisation_id=organisation_id,
+                    limited_disclosure=(
+                        issue_credential_req.limitedDisclosure
+                        if issue_credential_req.limitedDisclosure
+                        else False
+                    ),
                 )
             )
             credentialExchangeId = credential_offer["id"]
@@ -536,6 +542,7 @@ async def handle_post_issue_credential(request: Request, context: V2RequestConte
 class UpdateCredentialOfferReq(BaseModel):
     dataAttributeValues: list
     dataAgreementId: constr(min_length=3, strip_whitespace=True)  # type: ignore
+    limitedDisclosure: Optional[bool] = None
 
 
 @config_routes.put(
@@ -584,6 +591,7 @@ async def handle_service_put_update_credential_offer(
                 credential_offer_id=credential_offer_id,
                 data_agreement_id=data_agreement_id,
                 data_attribute_values=update_credential_offer_req.dataAttributeValues,
+                limited_disclosure=update_credential_offer_req.limitedDisclosure,
             )
 
             return web.json_response(credential_offer)

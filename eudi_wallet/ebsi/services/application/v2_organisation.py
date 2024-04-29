@@ -76,10 +76,11 @@ from eudi_wallet.ebsi.value_objects.domain.issuer import (
 )
 from eudi_wallet.ebsi.utils.webhook import send_webhook
 
-from sdjwt.sdjwt import create_w3c_vc_sd_jwt
+from sdjwt.sdjwt import create_w3c_vc_sd_jwt, create_w3c_vc_sd_jwt_for_data_attributes
 from eudi_wallet.ebsi.utils.common import (
     convert_data_attributes_to_json_schema,
     convert_data_attributes_to_credential,
+    convert_data_attributes_raw_list_to_data_attributes_list,
 )
 
 
@@ -141,6 +142,7 @@ class V2OrganisationService:
         user_pin: Optional[str] = None,
         data_attribute_values: Optional[list] = None,
         trust_framework: Optional[IssuerTrustFrameworks] = None,
+        limited_disclosure: Optional[bool] = False,
     ) -> dict:
         assert (
             self.issue_credential_record_repository is not None
@@ -230,8 +232,8 @@ class V2OrganisationService:
                         if data_attribute_values
                         else CredentialStatuses.Pending.value
                     ),
-                    trust_framework=trust_framework.value if trust_framework else None,
                     status=CredentialOfferStatuses.OfferSent.value,
+                    limitedDisclosure=limited_disclosure,
                 )
 
                 if is_pre_authorised:
@@ -301,7 +303,7 @@ class V2OrganisationService:
                 raise CredentialOfferAccessedError(
                     f"Credential offer with id {credential_offer_id} accessed"
                 )
-            if data_agreement_model.limitedDisclosure:
+            if credential_offer_entity.limitedDisclosure:
                 format = "vc+sd-jwt"
             else:
                 format = "jwt_vc"
@@ -811,9 +813,15 @@ class V2OrganisationService:
                 jti = credential_id
                 iss = self.key_did.did
                 sub = credential_offer_entity.clientId
-                if data_agreement_model.limitedDisclosure:
+                data_attributes_list = (
+                    convert_data_attributes_raw_list_to_data_attributes_list(
+                        credential_offer_entity.dataAttributeValues,
+                        credential_offer_entity.limitedDisclosure,
+                    )
+                )
+                if credential_offer_entity.limitedDisclosure:
                     format = "vc+sd-jwt"
-                    to_be_issued_credential = create_w3c_vc_sd_jwt(
+                    to_be_issued_credential = create_w3c_vc_sd_jwt_for_data_attributes(
                         jti=jti,
                         iss=iss,
                         sub=sub,
@@ -823,18 +831,18 @@ class V2OrganisationService:
                         credential_id=credential_id,
                         credential_type=credential_type,
                         credential_context=credential_context,
-                        credential_subject=credential_subject,
+                        data_attributes=data_attributes_list,
                         credential_schema=credential_schema,
                         credential_status=None,
                         terms_of_use=None,
+                        limited_disclosure=credential_offer_entity.limitedDisclosure,
                     )
                 else:
                     format = "jwt_vc"
-                    to_be_issued_credential = self._create_credential_token(
+                    to_be_issued_credential = create_w3c_vc_sd_jwt_for_data_attributes(
                         credential_id=credential_id,
                         credential_type=credential_type,
                         credential_context=credential_context,
-                        credential_subject=credential_subject,
                         credential_status=None,
                         terms_of_use=None,
                         credential_schema=credential_schema,
@@ -844,6 +852,8 @@ class V2OrganisationService:
                         sub=sub,
                         key=self.key_did._key,
                         credential_issuer=self.key_did.did,
+                        limited_disclosure=False,
+                        data_attributes=data_attributes_list,
                     )
 
                 # Update the credential offer entity with the DID of the client
@@ -912,9 +922,15 @@ class V2OrganisationService:
                 sub = credential_offer_entity.clientId
             else:
                 sub = ""
-            if data_agreement_model.limitedDisclosure:
+            data_attributes_list = (
+                convert_data_attributes_raw_list_to_data_attributes_list(
+                    credential_offer_entity.dataAttributeValues,
+                    credential_offer_entity.limitedDisclosure,
+                )
+            )
+            if credential_offer_entity.limitedDisclosure:
                 format = "vc+sd-jwt"
-                to_be_issued_credential = create_w3c_vc_sd_jwt(
+                to_be_issued_credential = create_w3c_vc_sd_jwt_for_data_attributes(
                     jti=jti,
                     iss=iss,
                     sub=sub,
@@ -924,27 +940,29 @@ class V2OrganisationService:
                     credential_id=credential_id,
                     credential_type=credential_type,
                     credential_context=credential_context,
-                    credential_subject=credential_subject,
+                    data_attributes=data_attributes_list,
                     credential_schema=credential_schema,
                     credential_status=None,
                     terms_of_use=None,
+                    limited_disclosure=credential_offer_entity.limitedDisclosure,
                 )
             else:
                 format = "jwt_vc"
-                to_be_issued_credential = self._create_credential_token(
-                    credential_id=credential_id,
-                    credential_type=credential_type,
-                    credential_context=credential_context,
-                    credential_subject=credential_subject,
-                    credential_status=None,
-                    terms_of_use=None,
-                    credential_schema=credential_schema,
-                    kid=kid,
+                to_be_issued_credential = create_w3c_vc_sd_jwt_for_data_attributes(
                     jti=jti,
                     iss=iss,
                     sub=sub,
+                    kid=kid,
                     key=self.key_did._key,
                     credential_issuer=self.key_did.did,
+                    credential_id=credential_id,
+                    credential_type=credential_type,
+                    credential_context=credential_context,
+                    data_attributes=data_attributes_list,
+                    credential_schema=credential_schema,
+                    credential_status=None,
+                    terms_of_use=None,
+                    limited_disclosure=False,
                 )
 
             credential_response = CredentialResponse(
@@ -969,6 +987,7 @@ class V2OrganisationService:
         data_agreement_id: str,
         credential_offer_id: str,
         data_attribute_values: list,
+        limited_disclosure: Optional[bool] = None,
     ) -> Union[dict, None]:
         assert (
             self.issue_credential_record_repository is not None
@@ -1043,6 +1062,7 @@ class V2OrganisationService:
                 dataAttributeValues=data_attribute_values,
                 credentialStatus=CredentialStatuses.Ready.value,
                 status=CredentialOfferStatuses.CredentialIssued.value,
+                limitedDisclosure=limited_disclosure,
             )
             if self.legal_entity_entity.webhook_url:
                 try:

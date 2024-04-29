@@ -63,6 +63,7 @@ class SqlAlchemyIssueCredentialRecordRepository:
             preAuthorisedCode=pre_authorised_code,
             userPin=user_pin,
             status=status,
+            **kwargs
         )
         self.session.add(credential_offer)
         self.session.commit()

@@ -32,6 +32,26 @@ def convert_data_attributes_to_credential(data_attributes: list) -> dict:
     return data_attributes_json_schema
 
 
+def convert_data_attributes_raw_list_to_data_attributes_list(
+    data_attributes: list, default_limited_desclosure: bool = False
+) -> list[DataAttribute]:
+    to_be_converted_data_attributes = []
+    for item in data_attributes:
+        name = item.get("name")
+        value = item.get("value")
+        limited_disclosure = item.get("limitedDisclosure")
+
+        if limited_disclosure is None:
+            limited_disclosure = default_limited_desclosure
+
+        to_be_converted_data_attributes.append(
+            DataAttribute(
+                name=name, value=value, limited_disclosure=limited_disclosure
+            )
+        )
+    return to_be_converted_data_attributes
+
+
 def validate_data_attribute_schema_against_data_attribute_values(
     data_attribute_schema: list, data_attribute_values: list
 ):
