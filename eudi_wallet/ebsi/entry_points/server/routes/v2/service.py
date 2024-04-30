@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, ValidationError, constr
 
 from eudi_wallet.ebsi.entry_points.server.decorators import (
     V2RequestContext,
-    v2_inject_request_context
+    v2_inject_request_context,
 )
 from eudi_wallet.ebsi.entry_points.server.v2_well_known import (
     service_get_well_known_openid_credential_issuer_config,
@@ -31,6 +31,16 @@ from eudi_wallet.ebsi.exceptions.domain.authn import (
 )
 from eudi_wallet.ebsi.exceptions.domain.issuer import (
     CredentialPendingError,
+)
+from eudi_wallet.ebsi.repositories.v2.verification_record import (
+    SqlAlchemyVerificationRecordRepository,
+)
+from eudi_wallet.ebsi.usecases.v2.organisation.receive_vp_token_usecase import (
+    ReceiveVpTokenUsecase,
+)
+from eudi_wallet.ebsi.usecases.v2.organisation.read_verification_request_by_reference import (
+    ReadVerificationRequestByReferenceUsecase,
+    ReadVerificationRequestByReferenceUsecaseError,
 )
 
 service_routes = web.RouteTableDef()
@@ -61,11 +71,51 @@ async def handle_get_credential_record_by_reference(
 
 
 @service_routes.get(
+    "/organisation/{organisationId}/service/verification-request/{verification_record_id}",
+    name="handle_get_verification_request_by_reference",
+)
+@v2_inject_request_context()
+async def handle_get_verification_request_by_reference(
+    request: Request, context: V2RequestContext
+):
+    assert context.app_context.db_session is not None
+    assert context.app_context.logger is not None
+    assert context.app_context.domain is not None
+    assert context.legal_entity_service is not None
+    repository = SqlAlchemyVerificationRecordRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+
+    verification_record_id = request.match_info.get("verification_record_id")
+    if verification_record_id is None:
+        raise web.HTTPBadRequest(reason="Invalid verification record ID")
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation ID")
+
+    try:
+        usecase = ReadVerificationRequestByReferenceUsecase(
+            repository=repository,
+            logger=context.app_context.logger,
+        )
+
+        verification_record = usecase.execute(
+            verification_record_id=verification_record_id,
+        )
+        return web.Response(
+            text=verification_record.vp_token_request, content_type="application/jwt"
+        )
+    except ReadVerificationRequestByReferenceUsecaseError as e:
+        raise web.HTTPBadRequest(text=str(e))
+
+
+@service_routes.get(
     "/organisation/{organisationId}/service/.well-known/openid-credential-issuer",
     name="handle_service_get_well_known_openid_credential_issuer_configuration",
 )
 @v2_inject_request_context(raise_exception_if_legal_entity_not_found=False)
 async def handle_service_get_well_known_openid_credential_issuer_configuration(
+
     request: Request,
     context: V2RequestContext,
 ):
@@ -80,6 +130,7 @@ async def handle_service_get_well_known_openid_credential_issuer_configuration(
         data_agreement_repository=context.data_agreement_repository,
     )
     return web.json_response(res)
+
 
 @service_routes.get(
     "/organisation/{organisationId}/service/.well-known/oauth-authorization-server",
@@ -97,6 +148,7 @@ async def handle_service_get_well_known_oauth_authorization_server(
         context.app_context.domain, organisation_id=organisation_id
     )
     return web.json_response(res)
+
 
 @service_routes.get(
     "/organisation/{organisationId}/service/.well-known/openid-configuration",
@@ -122,7 +174,6 @@ async def handle_service_get_well_known_openid_configuration(
 )
 @v2_inject_request_context()
 async def handle_service_get_authorize(request: Request, context: V2RequestContext):
-
     organisation_id = request.match_info.get("organisationId")
     if organisation_id is None:
         raise web.HTTPBadRequest(reason="Invalid organisation id")
@@ -199,14 +250,46 @@ async def handle_service_post_direct_post(request: Request, context: V2RequestCo
 
     try:
         id_token_response_req = IDTokenResponseReq(**data)
-        redirect_url = await context.legal_entity_service.prepare_redirect_url_with_authorisation_code_and_state_for_id_token(
-            id_token_response=id_token_response_req.id_token,
-            state=id_token_response_req.state,
-        )
 
-        response = web.Response(status=302)
-        response.headers["Location"] = redirect_url
-        return response
+        if id_token_response_req.id_token is not None:
+            redirect_url = await context.legal_entity_service.prepare_redirect_url_with_authorisation_code_and_state_for_id_token(
+                id_token_response=id_token_response_req.id_token,
+                state=id_token_response_req.state,
+            )
+
+            response = web.Response(status=302)
+            response.headers["Location"] = redirect_url
+            return response
+        else:
+            assert context.app_context.db_session is not None
+            assert context.app_context.logger is not None
+            assert context.app_context.domain is not None
+            assert context.legal_entity_service is not None
+            repository = SqlAlchemyVerificationRecordRepository(
+                session=context.app_context.db_session,
+                logger=context.app_context.logger,
+            )
+
+            organisation_id = request.match_info.get("organisationId")
+            if organisation_id is None:
+                raise web.HTTPBadRequest(reason="Invalid organisation id")
+
+            usecase = ReceiveVpTokenUsecase(
+                repository=repository,
+                logger=context.app_context.logger,
+            )
+
+            verification_record = usecase.execute(
+                organisation_id=organisation_id,
+                state=id_token_response_req.state,
+                vp_token=id_token_response_req.vp_token,
+                presentation_submission={
+                    "presentation_submission": json.loads(
+                        id_token_response_req.presentation_submission
+                    )
+                },
+            )
+            return web.json_response(verification_record.to_dict())
 
     except InvalidStateInIDTokenResponseError as e:
         raise web.HTTPBadRequest(text=str(e))

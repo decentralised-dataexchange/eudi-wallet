@@ -9,9 +9,14 @@ from eudi_wallet.ebsi.entry_points.server.decorators import (
     V2RequestContext,
     v2_inject_request_context,
 )
-
+from eudi_wallet.ebsi.repositories.v2.verification_record import (
+    SqlAlchemyVerificationRecordRepository,
+)
 from eudi_wallet.ebsi.value_objects.application.organisation import (
     DataAgreementExchangeModes,
+)
+from eudi_wallet.ebsi.usecases.v2.organisation.create_verification_request_usecase import (
+    CreateVerificationRequestUsecase,
 )
 from eudi_wallet.ebsi.usecases.v2.organisation.register_organisation_usecase import (
     RegisterOrganisationUsecase,
@@ -56,6 +61,20 @@ from eudi_wallet.ebsi.exceptions.application.organisation import (
 from eudi_wallet.ebsi.services.domain.utils.did import generate_and_store_did
 from eudi_wallet.ebsi.utils.common import (
     validate_data_attribute_schema_against_data_attribute_values,
+)
+from sdjwt.pex import (
+    validate_and_deserialise_presentation_definition,
+    PresentationDefinitionValidationError,
+)
+from eudi_wallet.ebsi.usecases.v2.organisation.read_verification_request_usecase import (
+    ReadVerificationRequestUsecase,
+)
+from eudi_wallet.ebsi.usecases.v2.organisation.delete_verification_request_usecase import (
+    DeleteVerificationRequestUsecase,
+)
+
+from eudi_wallet.ebsi.usecases.v2.organisation.list_verification_request_usecase import (
+    ListVerificationRequestUsecase,
 )
 
 config_routes = web.RouteTableDef()
@@ -721,3 +740,177 @@ async def handle_config_delete_credential_offer(
         return web.HTTPNoContent()
     else:
         return web.HTTPBadRequest(text="Credential offer not deleted")
+
+
+class CreateVerificationReq(BaseModel):
+    presentationDefinition: Optional[dict] = None
+    requestByReference: bool = False
+
+
+@config_routes.post(
+    "/organisation/{organisationId}/config/verification/send",
+    name="handle_post_create_verification_request",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_post_create_verification_request(
+    request: Request, context: V2RequestContext
+):
+    assert context.app_context.db_session is not None
+    assert context.app_context.logger is not None
+    assert context.app_context.domain is not None
+    assert context.legal_entity_service is not None
+    repository = SqlAlchemyVerificationRecordRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+
+    # Validate organisation ID in the path parameter
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation id")
+
+    try:
+        data = await request.json()
+        request_body = CreateVerificationReq(**data)
+
+        # Validate presentation definition
+        validate_and_deserialise_presentation_definition(
+            presentation_definition=request_body.presentationDefinition
+        )
+
+        usecase = CreateVerificationRequestUsecase(
+            repository=repository,
+            logger=context.app_context.logger,
+        )
+
+        _, verification_record = usecase.execute(
+            key_did=context.legal_entity_service.key_did,
+            domain=context.app_context.domain,
+            organisation_id=organisation_id,
+            presentation_definition=request_body.presentationDefinition,
+            requestByReference=request_body.requestByReference,
+        )
+        return web.json_response(verification_record.to_dict())
+    except ValidationError as e:
+        raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
+    except PresentationDefinitionValidationError as e:
+        raise web.HTTPBadRequest(reason=str(e))
+
+
+@config_routes.get(
+    "/organisation/{organisationId}/config/verification/history/{verificationRecordId}",
+    name="handle_get_read_verification_history",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_get_read_verification_history(
+    request: Request, context: V2RequestContext
+):
+    assert context.app_context.db_session is not None
+    assert context.app_context.logger is not None
+    assert context.app_context.domain is not None
+    assert context.legal_entity_service is not None
+    repository = SqlAlchemyVerificationRecordRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation ID")
+
+    verification_record_id = request.match_info.get("verificationRecordId")
+    if verification_record_id is None:
+        raise web.HTTPBadRequest(reason="Invalid verification record ID")
+
+    try:
+        usecase = ReadVerificationRequestUsecase(
+            repository=repository,
+            logger=context.app_context.logger,
+        )
+
+        verification_record = usecase.execute(
+            verification_record_id=verification_record_id
+        )
+        return web.json_response(verification_record.to_dict())
+    except ValidationError as e:
+        raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
+    except PresentationDefinitionValidationError as e:
+        raise web.HTTPBadRequest(reason=str(e))
+
+
+@config_routes.delete(
+    "/organisation/{organisationId}/config/verification/history/{verificationRecordId}",
+    name="handle_delete_verification_history",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_delete_verification_history(
+    request: Request, context: V2RequestContext
+):
+    assert context.app_context.db_session is not None
+    assert context.app_context.logger is not None
+    assert context.app_context.domain is not None
+    assert context.legal_entity_service is not None
+    repository = SqlAlchemyVerificationRecordRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation ID")
+
+    verification_record_id = request.match_info.get("verificationRecordId")
+    if verification_record_id is None:
+        raise web.HTTPBadRequest(reason="Invalid verification record ID")
+
+    try:
+        usecase = DeleteVerificationRequestUsecase(
+            repository=repository,
+            logger=context.app_context.logger,
+        )
+
+        is_deleted = usecase.execute(
+            organisation_id=organisation_id,
+            verification_record_id=verification_record_id,
+        )
+        if is_deleted:
+            return web.json_response(status=204)
+        else:
+            return web.json_response(status=400)
+    except ValidationError as e:
+        raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
+    except PresentationDefinitionValidationError as e:
+        raise web.HTTPBadRequest(reason=str(e))
+
+
+@config_routes.get(
+    "/organisation/{organisationId}/config/verification/history",
+    name="handle_list_verification_history",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_list_verification_history(request: Request, context: V2RequestContext):
+    assert context.app_context.db_session is not None
+    assert context.app_context.logger is not None
+    assert context.app_context.domain is not None
+    assert context.legal_entity_service is not None
+    repository = SqlAlchemyVerificationRecordRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation ID")
+
+    try:
+        usecase = ListVerificationRequestUsecase(
+            repository=repository,
+            logger=context.app_context.logger,
+        )
+
+        verification_records = usecase.execute(
+            organisation_id=organisation_id,
+        )
+        return web.json_response(
+            [
+                verification_record.to_dict()
+                for verification_record in verification_records
+            ]
+        )
+    except ValidationError as e:
+        raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
+    except PresentationDefinitionValidationError as e:
+        raise web.HTTPBadRequest(reason=str(e))

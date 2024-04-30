@@ -1,11 +1,10 @@
 import requests
 
 
-def send_webhook(webhook_base_url, payload=None):
+def send_webhook(webhook_base_url, payload=None, topic="/topic/issue_credential/"):
     method = "POST"
     headers = {"Content-Type": "application/json"}
     timeout = 10
-    topic = "/topic/issue_credential/"
     webhook_url = webhook_base_url + topic
 
     try:

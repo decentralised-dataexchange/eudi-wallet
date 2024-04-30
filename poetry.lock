@@ -1943,7 +1943,7 @@ python-versions = ">=3.8"
 
 [[package]]
 name = "sdjwt"
-version = "2024.4.5"
+version = "2024.4.6"
 description = ""
 category = "main"
 optional = false
@@ -1961,8 +1961,8 @@ pytz = "^2024.1"
 [package.source]
 type = "git"
 url = "https://github.com/decentralised-dataexchange/sd-jwt-playground.git"
-reference = "2024.4.5"
-resolved_reference = "93b6ca1716503b124c4e722cbfe4c9379a22e0a7"
+reference = "2024.4.6"
+resolved_reference = "644d311e7dd952a3c776dba30bf7c814224eed4e"
 
 [[package]]
 name = "send2trash"
@@ -2326,7 +2326,7 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.10.1,<3.11"
-content-hash = "e3838ab9fa28c14fc3224738d494259e30fc2cca4bd0492076048612f2a1e8ad"
+content-hash = "14b8ddaa99fa37742635c5e3c039827cd642b51ba05e3b2f294565483cff0995"
 
 [metadata.files]
 aiohttp = [

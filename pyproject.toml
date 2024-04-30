@@ -35,7 +35,7 @@ jsonpath-ng = "^1.6.1"
 setuptools = "^68.2.0"
 web3 = "^6.9.0"
 pip = "^23.2.1"
-sdjwt = {git = "https://github.com/decentralised-dataexchange/sd-jwt-playground.git", rev = "2024.4.5"}
+sdjwt = {git = "https://github.com/decentralised-dataexchange/sd-jwt-playground.git", rev = "2024.4.6"}
 alembic = "^1.13.1"
 
 [tool.poetry.dev-dependencies]

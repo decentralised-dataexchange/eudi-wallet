@@ -18,3 +18,4 @@ def import_models():
     from eudi_wallet.ebsi.models.v2.issue_credential_record import (
         IssueCredentialRecordModel,
     )  # noqa: F401
+    from eudi_wallet.ebsi.models.v2.verification_record import VerificationRecordModel  # noqa: F401
