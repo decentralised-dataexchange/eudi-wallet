@@ -133,6 +133,96 @@ class V2OrganisationService:
     ) -> None:
         self.legal_entity_entity = legal_entity_entity
 
+    async def issue_credential_with_disclosure_mapping(
+        self,
+        organisation_id: str,
+        issuance_mode: CredentialIssuanceModes = None,
+        is_pre_authorised: bool = False,
+        user_pin: Optional[str] = None,
+        credential: Optional[str] = None,
+        disclosureMapping: Optional[dict] = None
+    ) -> dict:
+        assert (
+            self.issue_credential_record_repository is not None
+        ), "Issue credential record repository not found"
+
+        if is_pre_authorised and not user_pin:
+            raise UserPinRequiredError(
+                "User pin is required for pre-authorised credential offers"
+            )
+
+        if (
+            issuance_mode.value == CredentialIssuanceModes.InTime
+            and not credential
+        ):
+            raise CreateCredentialOfferError(
+                "Credential is required for in time issuance"
+            )
+
+        iat = int(time.time())
+        exp = iat + 3600
+
+        with self.issue_credential_record_repository as credential_offer_repo:
+
+            credential_offer_entity = credential_offer_repo.create_without_data_agreement(
+                organisation_id=organisation_id,
+                issuance_mode=issuance_mode.value,
+                is_pre_authorised=is_pre_authorised,
+                user_pin=user_pin,
+                credential_status=(
+                    CredentialStatuses.Ready.value
+                    if credential
+                    else CredentialStatuses.Pending.value
+                ),
+                status=CredentialOfferStatuses.OfferSent.value,
+                credential=credential,
+                disclosureMapping=disclosureMapping
+            )
+
+            if is_pre_authorised:
+                pre_authorised_code = IssuerService.create_pre_authorised_code(
+                    iss=self.key_did.did,
+                    aud=self.key_did.did,
+                    sub=self.key_did.did,
+                    iat=iat,
+                    nbf=iat,
+                    exp=exp,
+                    kid=f"{self.key_did.did}#{self.key_did._method_specific_id}",
+                    key=self.key_did._key,
+                    credential_offer_id=str(credential_offer_entity.id),
+                )
+
+                credential_offer_entity = credential_offer_repo.update(
+                    id=credential_offer_entity.id,
+                    preAuthorisedCode=pre_authorised_code,
+                )
+            else:
+                issuer_state = IssuerService.create_issuer_state(
+                    iss=self.key_did.did,
+                    aud=self.key_did.did,
+                    sub=self.key_did.did,
+                    iat=iat,
+                    nbf=iat,
+                    exp=exp,
+                    kid=f"{self.key_did.did}#{self.key_did._method_specific_id}",
+                    key=self.key_did._key,
+                    credential_offer_id=str(credential_offer_entity.id),
+                )
+
+                credential_offer_entity = credential_offer_repo.update(
+                    id=credential_offer_entity.id, issuerState=issuer_state
+                )
+        if self.legal_entity_entity.webhook_url:
+            try:
+                send_webhook(
+                    self.legal_entity_entity.webhook_url,
+                    credential_offer_entity.to_dict(),
+                )
+            except Exception as e:
+                self.logger.error("Exception occurred during sending webhook")
+        return credential_offer_entity.to_dict()
+
+
     async def issue_credential_record(
         self,
         data_agreement_id: str,

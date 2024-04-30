@@ -1,4 +1,5 @@
 from aiohttp import web
+import traceback
 
 from eudi_wallet.ebsi.entry_points.server.utils import get_app_context
 
@@ -57,6 +58,7 @@ async def error_middleware(app, handler):
             # Re-raise the exception so aiohttp can handle it
             raise
         except Exception as ex:
+            logger.debug(f"Stacktrace: {str(traceback.format_exc())}")
             # Log the exception
             logger.debug(f"Caught exception: {type(ex).__name__}: {ex}")
             # Return a HTTP 500 error to the client

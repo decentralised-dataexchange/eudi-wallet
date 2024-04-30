@@ -21,7 +21,7 @@ class IssueCredentialRecordModel(Base):
     dataAgreementId = Column(
         UUID(as_uuid=True),
         ForeignKey("v2_data_agreement.id"),
-        nullable=False,
+        nullable=True,
     )
     dataAgreement = relationship(
         "V2DataAgreementModel", back_populates="issue_credential_record"
@@ -33,7 +33,9 @@ class IssueCredentialRecordModel(Base):
         nullable=False,
     )
 
-    dataAttributeValues = Column(JSON, nullable=False)
+    dataAttributeValues = Column(JSON, nullable=True, default="{}")
+    credential = Column(JSON, nullable=True, default="{}")
+    disclosureMapping = Column(JSON, nullable=True, default="{}")
 
     issuanceMode = Column(String, nullable=False)
     isPreAuthorised = Column(Boolean, default=False)

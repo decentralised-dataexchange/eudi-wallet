@@ -94,7 +94,9 @@ class RegisterOrganisationReq(BaseModel):
     webhookUrl: Optional[HttpUrl] = None
 
 
-@config_routes.post("/config/organisation", name="handle_config_post_register_organisation")  # type: ignore
+@config_routes.post(
+    "/config/organisation", name="handle_config_post_register_organisation"
+)  # type: ignore
 @v2_inject_request_context(
     raise_exception_if_legal_entity_not_found=False,
     raise_exception_if_not_legal_entity_path_param=False,
@@ -453,8 +455,10 @@ class CreateDataSourceIssueCredentialReq(BaseModel):
     userPin: Optional[
         constr(min_length=4, max_length=4, pattern="^[0-9]{4}$", strip_whitespace=True)  # type: ignore
     ] = None
-    dataAgreementId: constr(min_length=3, strip_whitespace=True)  # type: ignore
+    dataAgreementId: Optional[constr(min_length=3, strip_whitespace=True)] = None  # type: ignore
     limitedDisclosure: Optional[bool] = None
+    credential: Optional[dict] = None
+    disclosureMapping: Optional[dict] = None
 
 
 @config_routes.post(
@@ -473,58 +477,73 @@ async def handle_post_issue_credential(request: Request, context: V2RequestConte
     data = await request.json()
     issue_credential_req = CreateDataSourceIssueCredentialReq(**data)
     data_agreement_id = issue_credential_req.dataAgreementId
+    credential = issue_credential_req.credential
+    disclosure_mapping = issue_credential_req.disclosureMapping
 
     try:
-        with context.data_agreement_repository as repo:
-            data_agreement_model = repo.get_by_id_and_organisation_id(
-                organisation_id=organisation_id, id=data_agreement_id
-            )
-            if not data_agreement_model:
-                raise IssueCredentialError(
-                    f"Credential schema with id {data_agreement_id} not found"
-                )
-            try:
-                if issue_credential_req.dataAttributeValues:
-                    is_valid_data_attribute_values = (
-                        validate_data_attribute_schema_against_data_attribute_values(
-                            data_agreement_model.dataAttributes,
-                            issue_credential_req.dataAttributeValues,
-                        )
-                    )
-            except ValueError as e:
-                error_message = str(e)
-                return web.json_response({"error": error_message}, status=400)
-        if (
-            data_agreement_model.methodOfUse
-            == DataAgreementExchangeModes.DataSource.value
-        ):
-
-            credential_offer = (
-                await context.legal_entity_service.issue_credential_record(
-                    data_agreement_id=data_agreement_id,
-                    data_attribute_values=(
-                        issue_credential_req.dataAttributeValues
-                        if issue_credential_req.dataAttributeValues
-                        else None
-                    ),
-                    issuance_mode=issue_credential_req.issuanceMode,
-                    is_pre_authorised=issue_credential_req.isPreAuthorised,
-                    user_pin=issue_credential_req.userPin,
-                    organisation_id=organisation_id,
-                    limited_disclosure=(
-                        issue_credential_req.limitedDisclosure
-                        if issue_credential_req.limitedDisclosure
-                        else False
-                    ),
-                )
+        if credential:
+            credential_offer = await context.legal_entity_service.issue_credential_with_disclosure_mapping(
+                issuance_mode=issue_credential_req.issuanceMode,
+                is_pre_authorised=issue_credential_req.isPreAuthorised,
+                user_pin=issue_credential_req.userPin,
+                organisation_id=organisation_id,
+                credential=credential,
+                disclosureMapping=disclosure_mapping,
             )
             credentialExchangeId = credential_offer["id"]
             issuer_domain = context.legal_entity_service.issuer_domain
             openid_credential_offer_uri = f"openid-credential-offer://?credential_offer_uri={issuer_domain}/organisation/{organisation_id}/service/credential-offer/{credentialExchangeId}"
             credential_offer["credentialOffer"] = openid_credential_offer_uri
-
         else:
-            raise ValidationError(f"Data agreement method of use is not data source")
+            with context.data_agreement_repository as repo:
+                data_agreement_model = repo.get_by_id_and_organisation_id(
+                    organisation_id=organisation_id, id=data_agreement_id
+                )
+                if not data_agreement_model:
+                    raise IssueCredentialError(
+                        f"Credential schema with id {data_agreement_id} not found"
+                    )
+                try:
+                    if issue_credential_req.dataAttributeValues:
+                        is_valid_data_attribute_values = validate_data_attribute_schema_against_data_attribute_values(
+                            data_agreement_model.dataAttributes,
+                            issue_credential_req.dataAttributeValues,
+                        )
+                except ValueError as e:
+                    error_message = str(e)
+                    return web.json_response({"error": error_message}, status=400)
+            if (
+                data_agreement_model.methodOfUse
+                == DataAgreementExchangeModes.DataSource.value
+            ):
+                credential_offer = (
+                    await context.legal_entity_service.issue_credential_record(
+                        data_agreement_id=data_agreement_id,
+                        data_attribute_values=(
+                            issue_credential_req.dataAttributeValues
+                            if issue_credential_req.dataAttributeValues
+                            else None
+                        ),
+                        issuance_mode=issue_credential_req.issuanceMode,
+                        is_pre_authorised=issue_credential_req.isPreAuthorised,
+                        user_pin=issue_credential_req.userPin,
+                        organisation_id=organisation_id,
+                        limited_disclosure=(
+                            issue_credential_req.limitedDisclosure
+                            if issue_credential_req.limitedDisclosure
+                            else False
+                        ),
+                    )
+                )
+                credentialExchangeId = credential_offer["id"]
+                issuer_domain = context.legal_entity_service.issuer_domain
+                openid_credential_offer_uri = f"openid-credential-offer://?credential_offer_uri={issuer_domain}/organisation/{organisation_id}/service/credential-offer/{credentialExchangeId}"
+                credential_offer["credentialOffer"] = openid_credential_offer_uri
+
+            else:
+                raise ValidationError(
+                    f"Data agreement method of use is not data source"
+                )
 
         return web.json_response(credential_offer, status=201)
     except ValidateDataAttributeValuesAgainstDataAttributesError as e:
@@ -617,7 +636,6 @@ async def handle_service_put_update_credential_offer(
 async def handle_config_get_credential_offer_by_id_and_credential_schema_id(
     request: Request, context: V2RequestContext
 ):
-
     organisation_id = request.match_info.get("organisationId")
     if organisation_id is None:
         raise web.HTTPBadRequest(reason="Invalid organisation id")
@@ -656,7 +674,6 @@ async def handle_config_get_all_credential_offers(
             data_agreement_id=data_agreement_id
         )
     else:
-
         credential_offers = await context.legal_entity_service.get_all_credential_offers_by_organisation_id(
             organisation_id=organisation_id
         )
@@ -676,7 +693,6 @@ async def handle_config_get_all_credential_offers(
 async def handle_config_delete_credential_offer(
     request: Request, context: V2RequestContext
 ):
-
     organisation_id = request.match_info.get("organisationId")
     if organisation_id is None:
         raise web.HTTPBadRequest(reason="Invalid organisation id")

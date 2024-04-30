@@ -33,6 +33,39 @@ class SqlAlchemyIssueCredentialRecordRepository:
         self.session = None
         return True
 
+    def create_without_data_agreement(
+        self,
+        organisation_id: str,
+        issuance_mode: str,
+        status: str,
+        is_pre_authorised: Optional[bool] = False,
+        credential_status: Optional[str] = None,
+        acceptance_token: Optional[str] = None,
+        authorisation_code: Optional[str] = None,
+        pre_authorised_code: Optional[str] = None,
+        user_pin: Optional[str] = None,
+        **kwargs,
+    ) -> IssueCredentialRecordModel:
+        assert self.session is not None
+        id = str(uuid.uuid4())
+        credential_offer = IssueCredentialRecordModel(
+            id=id,
+            organisationId=organisation_id,
+            issuanceMode=issuance_mode,
+            isPreAuthorised=is_pre_authorised,
+            credentialStatus=credential_status,
+            acceptanceToken=acceptance_token,
+            authorisationCode=authorisation_code,
+            preAuthorisedCode=pre_authorised_code,
+            userPin=user_pin,
+            status=status,
+            **kwargs,
+        )
+        self.session.add(credential_offer)
+        self.session.commit()
+        self.session.refresh(credential_offer)
+        return credential_offer
+
     def create(
         self,
         data_agreement_id: str,
@@ -63,7 +96,7 @@ class SqlAlchemyIssueCredentialRecordRepository:
             preAuthorisedCode=pre_authorised_code,
             userPin=user_pin,
             status=status,
-            **kwargs
+            **kwargs,
         )
         self.session.add(credential_offer)
         self.session.commit()
