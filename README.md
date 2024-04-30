@@ -18,7 +18,9 @@
 
 ## About
 
-This repository hosts the source code for the Python port for the EUDI wallet. This implementation uses the ES256K (ECDSA) signing algorithm. 
+This repository hosts the source code for the Python port for the EUDI wallet. This is aligned with implementing digital wallets across the EWC LSP consortium wallet providers as per the European Architecture and Reference Framework (ARF). This SDK ensures the provider entity can self-test and sign off against the EWC Interoperability Test Bed (ITB).
+
+This implementation uses the ES256K (ECDSA) signing algorithm. 
 
 ## Release Status
 
