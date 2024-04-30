@@ -76,7 +76,11 @@ from eudi_wallet.ebsi.value_objects.domain.issuer import (
 )
 from eudi_wallet.ebsi.utils.webhook import send_webhook
 
-from sdjwt.sdjwt import create_w3c_vc_sd_jwt, create_w3c_vc_sd_jwt_for_data_attributes
+from sdjwt.sdjwt import (
+    create_w3c_vc_sd_jwt,
+    create_w3c_vc_sd_jwt_for_data_attributes,
+    create_w3c_vc_jwt_with_disclosure_mapping,
+)
 from eudi_wallet.ebsi.utils.common import (
     convert_data_attributes_to_json_schema,
     convert_data_attributes_to_credential,
@@ -140,7 +144,7 @@ class V2OrganisationService:
         is_pre_authorised: bool = False,
         user_pin: Optional[str] = None,
         credential: Optional[str] = None,
-        disclosureMapping: Optional[dict] = None
+        disclosureMapping: Optional[dict] = None,
     ) -> dict:
         assert (
             self.issue_credential_record_repository is not None
@@ -151,10 +155,7 @@ class V2OrganisationService:
                 "User pin is required for pre-authorised credential offers"
             )
 
-        if (
-            issuance_mode.value == CredentialIssuanceModes.InTime
-            and not credential
-        ):
+        if issuance_mode.value == CredentialIssuanceModes.InTime and not credential:
             raise CreateCredentialOfferError(
                 "Credential is required for in time issuance"
             )
@@ -163,20 +164,21 @@ class V2OrganisationService:
         exp = iat + 3600
 
         with self.issue_credential_record_repository as credential_offer_repo:
-
-            credential_offer_entity = credential_offer_repo.create_without_data_agreement(
-                organisation_id=organisation_id,
-                issuance_mode=issuance_mode.value,
-                is_pre_authorised=is_pre_authorised,
-                user_pin=user_pin,
-                credential_status=(
-                    CredentialStatuses.Ready.value
-                    if credential
-                    else CredentialStatuses.Pending.value
-                ),
-                status=CredentialOfferStatuses.OfferSent.value,
-                credential=credential,
-                disclosureMapping=disclosureMapping
+            credential_offer_entity = (
+                credential_offer_repo.create_without_data_agreement(
+                    organisation_id=organisation_id,
+                    issuance_mode=issuance_mode.value,
+                    is_pre_authorised=is_pre_authorised,
+                    user_pin=user_pin,
+                    credential_status=(
+                        CredentialStatuses.Ready.value
+                        if credential.get("credentialSubject")
+                        else CredentialStatuses.Pending.value
+                    ),
+                    status=CredentialOfferStatuses.OfferSent.value,
+                    credential=credential,
+                    disclosureMapping=disclosureMapping,
+                )
             )
 
             if is_pre_authorised:
@@ -221,7 +223,6 @@ class V2OrganisationService:
             except Exception as e:
                 self.logger.error("Exception occurred during sending webhook")
         return credential_offer_entity.to_dict()
-
 
     async def issue_credential_record(
         self,
@@ -307,7 +308,6 @@ class V2OrganisationService:
             exp = iat + 3600
 
             with self.issue_credential_record_repository as credential_offer_repo:
-
                 credential_offer_entity = credential_offer_repo.create(
                     data_agreement_id=data_agreement_model.id,
                     organisation_id=organisation_id,
@@ -373,6 +373,59 @@ class V2OrganisationService:
             )
         return credential_offer_entity.to_dict()
 
+    async def get_credential_offer_without_data_agreement(
+        self,
+        credential_offer_entity,
+        organisation_id: str = None,
+    ) -> dict:
+        # https://openid.net/specs/openid-4-verifiable-credential-issuance-1_0.html#section-4.1.3
+
+        credential = credential_offer_entity.credential
+        if credential_offer_entity is None:
+            raise CredentialOfferNotFoundError(
+                f"Credential offer with id {credential_offer_entity.id} not found"
+            )
+        if credential_offer_entity.isAccessed:
+            raise CredentialOfferAccessedError(
+                f"Credential offer with id {credential_offer_entity.id} accessed"
+            )
+        if credential_offer_entity.disclosureMapping:
+            format = "vc+sd-jwt"
+        else:
+            format = "jwt_vc"
+
+        credential_offer_by_reference = {
+            "credential_issuer": f"{self.issuer_domain}/organisation/{organisation_id}/service",
+            "credentials": [
+                {
+                    "format": format,
+                    "types": credential.get("type")
+                    if credential.get("type")
+                    else ["VerifiableCredential"],
+                    "trust_framework": {
+                        "name": "ebsi",
+                        "type": "Accreditation",
+                        "uri": "TIR link towards accreditation",
+                    },
+                }
+            ],
+        }
+
+        if credential_offer_entity.isPreAuthorised:
+            credential_offer_by_reference["grants"] = {
+                AuthorisationGrants.PreAuthorisedCode.value.grant_type: {
+                    AuthorisationGrants.PreAuthorisedCode.value.grant_data: credential_offer_entity.preAuthorisedCode,
+                    "user_pin_required": True,
+                },
+            }
+        else:
+            credential_offer_by_reference["grants"] = {
+                AuthorisationGrants.AuthorisationCode.value.grant_type: {
+                    AuthorisationGrants.AuthorisationCode.value.grant_data: credential_offer_entity.issuerState
+                }
+            }
+        return credential_offer_by_reference
+
     async def get_credential_offer_record_by_reference_using_credential_offer_uri(
         self,
         credential_offer_id: str,
@@ -385,47 +438,56 @@ class V2OrganisationService:
             data_agreement_model: V2DataAgreementModel = (
                 credential_offer_entity.dataAgreement
             )
-            if credential_offer_entity is None:
-                raise CredentialOfferNotFoundError(
-                    f"Credential offer with id {credential_offer_id} not found"
+            credential_offer_by_reference = {}
+            if data_agreement_model is None:
+                credential_offer_by_reference = (
+                    await self.get_credential_offer_without_data_agreement(
+                        credential_offer_entity=credential_offer_entity,
+                        organisation_id=organisation_id,
+                    )
                 )
-            if credential_offer_entity.isAccessed:
-                raise CredentialOfferAccessedError(
-                    f"Credential offer with id {credential_offer_id} accessed"
-                )
-            if credential_offer_entity.limitedDisclosure:
-                format = "vc+sd-jwt"
             else:
-                format = "jwt_vc"
+                if credential_offer_entity is None:
+                    raise CredentialOfferNotFoundError(
+                        f"Credential offer with id {credential_offer_id} not found"
+                    )
+                if credential_offer_entity.isAccessed:
+                    raise CredentialOfferAccessedError(
+                        f"Credential offer with id {credential_offer_id} accessed"
+                    )
+                if credential_offer_entity.limitedDisclosure:
+                    format = "vc+sd-jwt"
+                else:
+                    format = "jwt_vc"
 
-            credential_offer_by_reference = {
-                "credential_issuer": f"{self.issuer_domain}/organisation/{organisation_id}/service",
-                "credentials": [
-                    {
-                        "format": format,
-                        "types": data_agreement_model.credentialTypes,
-                        "trust_framework": {
-                            "name": "ebsi",
-                            "type": "Accreditation",
-                            "uri": "TIR link towards accreditation",
+                credential_offer_by_reference = {
+                    "credential_issuer": f"{self.issuer_domain}/organisation/{organisation_id}/service",
+                    "credentials": [
+                        {
+                            "format": format,
+                            "types": data_agreement_model.credentialTypes,
+                            "trust_framework": {
+                                "name": "ebsi",
+                                "type": "Accreditation",
+                                "uri": "TIR link towards accreditation",
+                            },
+                        }
+                    ],
+                }
+
+                if credential_offer_entity.isPreAuthorised:
+                    credential_offer_by_reference["grants"] = {
+                        AuthorisationGrants.PreAuthorisedCode.value.grant_type: {
+                            AuthorisationGrants.PreAuthorisedCode.value.grant_data: credential_offer_entity.preAuthorisedCode,
+                            "user_pin_required": True,
                         },
                     }
-                ],
-            }
-
-            if credential_offer_entity.isPreAuthorised:
-                credential_offer_by_reference["grants"] = {
-                    AuthorisationGrants.PreAuthorisedCode.value.grant_type: {
-                        AuthorisationGrants.PreAuthorisedCode.value.grant_data: credential_offer_entity.preAuthorisedCode,
-                        "user_pin_required": True,
-                    },
-                }
-            else:
-                credential_offer_by_reference["grants"] = {
-                    AuthorisationGrants.AuthorisationCode.value.grant_type: {
-                        AuthorisationGrants.AuthorisationCode.value.grant_data: credential_offer_entity.issuerState
+                else:
+                    credential_offer_by_reference["grants"] = {
+                        AuthorisationGrants.AuthorisationCode.value.grant_type: {
+                            AuthorisationGrants.AuthorisationCode.value.grant_data: credential_offer_entity.issuerState
+                        }
                     }
-                }
             credential_offer_entity = repo.update(
                 id=credential_offer_entity.id,
                 status=CredentialOfferStatuses.OfferReceived.value,
@@ -861,9 +923,6 @@ class V2OrganisationService:
             credential_offer_entity = repo.get_by_id(credential_offer_id)
             if not credential_offer_entity:
                 raise InvalidAccessTokenError(f"Invalid access token {access_token}")
-            data_agreement_model: V2DataAgreementModel = (
-                credential_offer_entity.dataAgreement
-            )
 
             AuthorisationService.verify_access_token(
                 token=access_token,
@@ -885,7 +944,203 @@ class V2OrganisationService:
                     acceptance_token=acceptance_token
                 )
             else:
+                data_agreement_model: V2DataAgreementModel = (
+                    credential_offer_entity.dataAgreement
+                )
+                if data_agreement_model is not None:
+                    credential_id = f"urn:did:{str(credential_offer_entity.id)}"
+                    credential_type = data_agreement_model.credentialTypes
+                    credential_context = ["https://www.w3.org/2018/credentials/v1"]
+                    credential_schema = [
+                        {
+                            "id": "https://api-conformance.ebsi.eu/trusted-schemas-registry/v2/schemas/z3MgUFUkb722uq4x3dv5yAJmnNmzDFeK5UC8x83QoeLJM",
+                            "type": "FullJsonSchemaValidator2021",
+                        }
+                    ]
+                    credential_subject = convert_data_attributes_to_credential(
+                        credential_offer_entity.dataAttributeValues
+                    )
+
+                    credential_subject["id"] = credential_offer_entity.clientId
+                    kid = f"{self.key_did.did}#{self.key_did._method_specific_id}"
+                    jti = credential_id
+                    iss = self.key_did.did
+                    sub = credential_offer_entity.clientId
+                    data_attributes_list = (
+                        convert_data_attributes_raw_list_to_data_attributes_list(
+                            credential_offer_entity.dataAttributeValues,
+                            credential_offer_entity.limitedDisclosure,
+                        )
+                    )
+                    if credential_offer_entity.limitedDisclosure:
+                        format = "vc+sd-jwt"
+                        to_be_issued_credential = create_w3c_vc_sd_jwt_for_data_attributes(
+                            jti=jti,
+                            iss=iss,
+                            sub=sub,
+                            kid=kid,
+                            key=self.key_did._key,
+                            credential_issuer=self.key_did.did,
+                            credential_id=credential_id,
+                            credential_type=credential_type,
+                            credential_context=credential_context,
+                            data_attributes=data_attributes_list,
+                            credential_schema=credential_schema,
+                            credential_status=None,
+                            terms_of_use=None,
+                            limited_disclosure=credential_offer_entity.limitedDisclosure,
+                        )
+                    else:
+                        format = "jwt_vc"
+                        to_be_issued_credential = (
+                            create_w3c_vc_sd_jwt_for_data_attributes(
+                                credential_id=credential_id,
+                                credential_type=credential_type,
+                                credential_context=credential_context,
+                                credential_status=None,
+                                terms_of_use=None,
+                                credential_schema=credential_schema,
+                                kid=kid,
+                                jti=jti,
+                                iss=iss,
+                                sub=sub,
+                                key=self.key_did._key,
+                                credential_issuer=self.key_did.did,
+                                limited_disclosure=False,
+                                data_attributes=data_attributes_list,
+                            )
+                        )
+
+                    # Update the credential offer entity with the DID of the client
+                    credential_offer_entity = repo.update(
+                        credential_offer_entity.id,
+                        did=credential_offer_entity.clientId,
+                        status=CredentialOfferStatuses.CredentialAcknowledged.value,
+                    )
+
+                    credential_response = CredentialResponse(
+                        format=format, credential=to_be_issued_credential
+                    )
+                    if self.legal_entity_entity.webhook_url:
+                        try:
+                            send_webhook(
+                                self.legal_entity_entity.webhook_url,
+                                credential_offer_entity.to_dict(),
+                            )
+                        except Exception as e:
+                            self.logger.error(
+                                "Exception occurred during sending webhook"
+                            )
+                else:
+                    credential_id = f"urn:did:{str(credential_offer_entity.id)}"
+                    credential_type = credential_offer_entity.credential.get("type", {})
+                    credential_context = ["https://www.w3.org/2018/credentials/v1"]
+                    credential_schema = [
+                        {
+                            "id": "https://api-conformance.ebsi.eu/trusted-schemas-registry/v2/schemas/z3MgUFUkb722uq4x3dv5yAJmnNmzDFeK5UC8x83QoeLJM",
+                            "type": "FullJsonSchemaValidator2021",
+                        }
+                    ]
+                    credential_subject = credential_offer_entity.credential.get(
+                        "credentialSubject", {}
+                    )
+                    credential_subject["id"] = credential_offer_entity.clientId
+                    kid = f"{self.key_did.did}#{self.key_did._method_specific_id}"
+                    jti = credential_id
+                    iss = self.key_did.did
+                    sub = credential_offer_entity.clientId
+                    if credential_offer_entity.disclosureMapping:
+                        format = "vc+sd-jwt"
+                        to_be_issued_credential = create_w3c_vc_jwt_with_disclosure_mapping(
+                            jti=jti,
+                            iss=iss,
+                            sub=sub,
+                            kid=kid,
+                            key=self.key_did._key,
+                            credential_issuer=self.key_did.did,
+                            credential_id=credential_id,
+                            credential_type=credential_type,
+                            credential_context=credential_context,
+                            credential_subject={
+                                "credentialSubject": credential_subject
+                            },
+                            credential_schema=credential_schema,
+                            credential_status=None,
+                            terms_of_use=None,
+                            disclosure_mapping=credential_offer_entity.disclosureMapping,
+                        )
+                    else:
+                        format = "jwt_vc"
+                        to_be_issued_credential = (
+                            create_w3c_vc_jwt_with_disclosure_mapping(
+                                jti=jti,
+                                iss=iss,
+                                sub=sub,
+                                kid=kid,
+                                key=self.key_did._key,
+                                credential_issuer=self.key_did.did,
+                                credential_id=credential_id,
+                                credential_type=credential_type,
+                                credential_context=credential_context,
+                                credential_subject={
+                                    "credentialSubject": credential_subject
+                                },
+                                credential_schema=credential_schema,
+                                credential_status=None,
+                                terms_of_use=None,
+                                disclosure_mapping=None,
+                            )
+                        )
+
+                    # Update the credential offer entity with the DID of the client
+                    credential_offer_entity = repo.update(
+                        credential_offer_entity.id,
+                        did=credential_offer_entity.clientId,
+                        status=CredentialOfferStatuses.CredentialAcknowledged.value,
+                    )
+
+                    credential_response = CredentialResponse(
+                        format=format, credential=to_be_issued_credential
+                    )
+                    if self.legal_entity_entity.webhook_url:
+                        try:
+                            send_webhook(
+                                self.legal_entity_entity.webhook_url,
+                                credential_offer_entity.to_dict(),
+                            )
+                        except Exception as e:
+                            self.logger.error(
+                                "Exception occurred during sending webhook"
+                            )
+            return credential_response
+
+    async def v2_issue_deferred_credential(
+        self,
+        acceptance_token: Optional[str] = None,
+    ) -> dict:
+        if not acceptance_token:
+            raise InvalidAcceptanceTokenError(
+                "Acceptance token is required to issue deferred credential"
+            )
+
+        with self.issue_credential_record_repository as repo:
+            credential_offer_entity = repo.get_by_acceptance_token(acceptance_token)
+            if not credential_offer_entity:
+                raise CredentialOfferNotFoundError("Credential offer not found")
+
+            data_agreement_model: V2DataAgreementModel = (
+                credential_offer_entity.dataAgreement
+            )
+
+            if (
+                credential_offer_entity.credentialStatus
+                == CredentialStatuses.Pending.value
+            ):
+                raise CredentialPendingError("Credential is not available yet")
+
+            if data_agreement_model is not None:
                 credential_id = f"urn:did:{str(credential_offer_entity.id)}"
+
                 credential_type = data_agreement_model.credentialTypes
                 credential_context = ["https://www.w3.org/2018/credentials/v1"]
                 credential_schema = [
@@ -902,7 +1157,10 @@ class V2OrganisationService:
                 kid = f"{self.key_did.did}#{self.key_did._method_specific_id}"
                 jti = credential_id
                 iss = self.key_did.did
-                sub = credential_offer_entity.clientId
+                if credential_offer_entity.clientId:
+                    sub = credential_offer_entity.clientId
+                else:
+                    sub = ""
                 data_attributes_list = (
                     convert_data_attributes_raw_list_to_data_attributes_list(
                         credential_offer_entity.dataAttributeValues,
@@ -930,130 +1188,78 @@ class V2OrganisationService:
                 else:
                     format = "jwt_vc"
                     to_be_issued_credential = create_w3c_vc_sd_jwt_for_data_attributes(
-                        credential_id=credential_id,
-                        credential_type=credential_type,
-                        credential_context=credential_context,
-                        credential_status=None,
-                        terms_of_use=None,
-                        credential_schema=credential_schema,
-                        kid=kid,
                         jti=jti,
                         iss=iss,
                         sub=sub,
+                        kid=kid,
                         key=self.key_did._key,
                         credential_issuer=self.key_did.did,
-                        limited_disclosure=False,
+                        credential_id=credential_id,
+                        credential_type=credential_type,
+                        credential_context=credential_context,
                         data_attributes=data_attributes_list,
+                        credential_schema=credential_schema,
+                        credential_status=None,
+                        terms_of_use=None,
+                        limited_disclosure=False,
                     )
-
-                # Update the credential offer entity with the DID of the client
-                credential_offer_entity = repo.update(
-                    credential_offer_entity.id,
-                    did=credential_offer_entity.clientId,
-                    status=CredentialOfferStatuses.CredentialAcknowledged.value,
+            else:
+                credential_id = f"urn:did:{str(credential_offer_entity.id)}"
+                credential_type = credential_offer_entity.credential.get("type", {})
+                credential_context = ["https://www.w3.org/2018/credentials/v1"]
+                credential_schema = [
+                    {
+                        "id": "https://api-conformance.ebsi.eu/trusted-schemas-registry/v2/schemas/z3MgUFUkb722uq4x3dv5yAJmnNmzDFeK5UC8x83QoeLJM",
+                        "type": "FullJsonSchemaValidator2021",
+                    }
+                ]
+                credential_subject = credential_offer_entity.credential.get(
+                    "credentialSubject", {}
                 )
-
-                credential_response = CredentialResponse(
-                    format=format, credential=to_be_issued_credential
-                )
-                if self.legal_entity_entity.webhook_url:
-                    try:
-                        send_webhook(
-                            self.legal_entity_entity.webhook_url,
-                            credential_offer_entity.to_dict(),
-                        )
-                    except Exception as e:
-                        self.logger.error("Exception occurred during sending webhook")
-        return credential_response
-
-    async def v2_issue_deferred_credential(
-        self,
-        acceptance_token: Optional[str] = None,
-    ) -> dict:
-        if not acceptance_token:
-            raise InvalidAcceptanceTokenError(
-                "Acceptance token is required to issue deferred credential"
-            )
-
-        with self.issue_credential_record_repository as repo:
-            credential_offer_entity = repo.get_by_acceptance_token(acceptance_token)
-            if not credential_offer_entity:
-                raise CredentialOfferNotFoundError("Credential offer not found")
-
-            data_agreement_model: V2DataAgreementModel = (
-                credential_offer_entity.dataAgreement
-            )
-
-            if (
-                credential_offer_entity.credentialStatus
-                == CredentialStatuses.Pending.value
-            ):
-                raise CredentialPendingError("Credential is not available yet")
-
-            credential_id = f"urn:did:{str(credential_offer_entity.id)}"
-
-            credential_type = data_agreement_model.credentialTypes
-            credential_context = ["https://www.w3.org/2018/credentials/v1"]
-            credential_schema = [
-                {
-                    "id": "https://api-conformance.ebsi.eu/trusted-schemas-registry/v2/schemas/z3MgUFUkb722uq4x3dv5yAJmnNmzDFeK5UC8x83QoeLJM",
-                    "type": "FullJsonSchemaValidator2021",
-                }
-            ]
-            credential_subject = convert_data_attributes_to_credential(
-                credential_offer_entity.dataAttributeValues
-            )
-
-            credential_subject["id"] = credential_offer_entity.clientId
-            kid = f"{self.key_did.did}#{self.key_did._method_specific_id}"
-            jti = credential_id
-            iss = self.key_did.did
-            if credential_offer_entity.clientId:
+                print("DEBUG>>")
+                print(credential_offer_entity.credential)
+                credential_subject["id"] = credential_offer_entity.clientId
+                kid = f"{self.key_did.did}#{self.key_did._method_specific_id}"
+                jti = credential_id
+                iss = self.key_did.did
                 sub = credential_offer_entity.clientId
-            else:
-                sub = ""
-            data_attributes_list = (
-                convert_data_attributes_raw_list_to_data_attributes_list(
-                    credential_offer_entity.dataAttributeValues,
-                    credential_offer_entity.limitedDisclosure,
-                )
-            )
-            if credential_offer_entity.limitedDisclosure:
-                format = "vc+sd-jwt"
-                to_be_issued_credential = create_w3c_vc_sd_jwt_for_data_attributes(
-                    jti=jti,
-                    iss=iss,
-                    sub=sub,
-                    kid=kid,
-                    key=self.key_did._key,
-                    credential_issuer=self.key_did.did,
-                    credential_id=credential_id,
-                    credential_type=credential_type,
-                    credential_context=credential_context,
-                    data_attributes=data_attributes_list,
-                    credential_schema=credential_schema,
-                    credential_status=None,
-                    terms_of_use=None,
-                    limited_disclosure=credential_offer_entity.limitedDisclosure,
-                )
-            else:
-                format = "jwt_vc"
-                to_be_issued_credential = create_w3c_vc_sd_jwt_for_data_attributes(
-                    jti=jti,
-                    iss=iss,
-                    sub=sub,
-                    kid=kid,
-                    key=self.key_did._key,
-                    credential_issuer=self.key_did.did,
-                    credential_id=credential_id,
-                    credential_type=credential_type,
-                    credential_context=credential_context,
-                    data_attributes=data_attributes_list,
-                    credential_schema=credential_schema,
-                    credential_status=None,
-                    terms_of_use=None,
-                    limited_disclosure=False,
-                )
+                if credential_offer_entity.disclosureMapping:
+                    format = "vc+sd-jwt"
+                    to_be_issued_credential = create_w3c_vc_jwt_with_disclosure_mapping(
+                        jti=jti,
+                        iss=iss,
+                        sub=sub,
+                        kid=kid,
+                        key=self.key_did._key,
+                        credential_issuer=self.key_did.did,
+                        credential_id=credential_id,
+                        credential_type=credential_type,
+                        credential_context=credential_context,
+                        credential_subject={"credentialSubject": credential_subject},
+                        credential_schema=credential_schema,
+                        credential_status=None,
+                        terms_of_use=None,
+                        disclosure_mapping=credential_offer_entity.disclosureMapping,
+                    )
+                else:
+                    print(credential_subject)
+                    format = "jwt_vc"
+                    to_be_issued_credential = create_w3c_vc_jwt_with_disclosure_mapping(
+                        jti=jti,
+                        iss=iss,
+                        sub=sub,
+                        kid=kid,
+                        key=self.key_did._key,
+                        credential_issuer=self.key_did.did,
+                        credential_id=credential_id,
+                        credential_type=credential_type,
+                        credential_context=credential_context,
+                        credential_subject={"credentialSubject": credential_subject},
+                        credential_schema=credential_schema,
+                        credential_status=None,
+                        terms_of_use=None,
+                        disclosure_mapping=None,
+                    )
 
             credential_response = CredentialResponse(
                 format=format, credential=to_be_issued_credential
@@ -1071,6 +1277,73 @@ class V2OrganisationService:
                 except Exception as e:
                     self.logger.error("Exception occurred during sending webhook")
             return credential_response.to_dict()
+
+    async def update_deferred_credential_offer_with_disclosure_mapping(
+        self,
+        credential_offer_id: str,
+        credential: Optional[str] = None,
+        disclosureMapping: Optional[dict] = None,
+    ) -> Union[dict, None]:
+        assert (
+            self.issue_credential_record_repository is not None
+        ), "Credential offer repository not found"
+
+        with self.issue_credential_record_repository as repo:
+            credential_offer_entity = repo.get_by_id(credential_offer_id)
+            if credential_offer_entity is None:
+                raise UpdateCredentialOfferError(
+                    f"Credential offer with id {credential_offer_id} not found"
+                )
+
+            if (
+                credential_offer_entity.issuanceMode
+                != CredentialIssuanceModes.Deferred.value
+            ):
+                raise UpdateCredentialOfferError(
+                    f"Credential offer with id {credential_offer_id} is not in deferred issuance mode"
+                )
+
+            if (
+                credential_offer_entity.credentialStatus
+                != CredentialStatuses.Pending.value
+            ):
+                raise UpdateCredentialOfferError(
+                    f"Credential offer with id {credential_offer_id} is not in pending status"
+                )
+
+            if not isinstance(credential, dict):
+                raise UpdateCredentialOfferError(
+                    f"Credential must be a valid JSON object"
+                )
+            if credential.get("credentialSubject") is None:
+                raise UpdateCredentialOfferError(
+                    f"Credential must contain credentialSubject field"
+                )
+
+            # Update credential present in DB with credentialSubject
+            credential.setdefault(
+                "type",
+                credential_offer_entity.credential.get(
+                    "type", ["VerifiableCredential"]
+                ),
+            )
+
+            credential_offer_entity = repo.update(
+                id=credential_offer_id,
+                credentialStatus=CredentialStatuses.Ready.value,
+                status=CredentialOfferStatuses.CredentialIssued.value,
+                credential=credential,
+                disclosureMapping=disclosureMapping,
+            )
+            if self.legal_entity_entity.webhook_url:
+                try:
+                    send_webhook(
+                        self.legal_entity_entity.webhook_url,
+                        credential_offer_entity.to_dict(),
+                    )
+                except Exception as e:
+                    self.logger.error("Exception occurred during sending webhook")
+            return credential_offer_entity.to_dict()
 
     async def update_deferred_credential_offer_with_data_attribute_values(
         self,
@@ -1172,7 +1445,6 @@ class V2OrganisationService:
             self.issue_credential_record_repository is not None
         ), "Credential offer repository not found"
         with self.issue_credential_record_repository as repo:
-
             credential_offer_entity = repo.get_by_id(id=credential_offer_id)
             return credential_offer_entity
 

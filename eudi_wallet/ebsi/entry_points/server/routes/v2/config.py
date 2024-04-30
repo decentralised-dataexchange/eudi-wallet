@@ -479,22 +479,10 @@ async def handle_post_issue_credential(request: Request, context: V2RequestConte
     data_agreement_id = issue_credential_req.dataAgreementId
     credential = issue_credential_req.credential
     disclosure_mapping = issue_credential_req.disclosureMapping
+    issuance_mode = issue_credential_req.issuanceMode
 
     try:
-        if credential:
-            credential_offer = await context.legal_entity_service.issue_credential_with_disclosure_mapping(
-                issuance_mode=issue_credential_req.issuanceMode,
-                is_pre_authorised=issue_credential_req.isPreAuthorised,
-                user_pin=issue_credential_req.userPin,
-                organisation_id=organisation_id,
-                credential=credential,
-                disclosureMapping=disclosure_mapping,
-            )
-            credentialExchangeId = credential_offer["id"]
-            issuer_domain = context.legal_entity_service.issuer_domain
-            openid_credential_offer_uri = f"openid-credential-offer://?credential_offer_uri={issuer_domain}/organisation/{organisation_id}/service/credential-offer/{credentialExchangeId}"
-            credential_offer["credentialOffer"] = openid_credential_offer_uri
-        else:
+        if data_agreement_id:
             with context.data_agreement_repository as repo:
                 data_agreement_model = repo.get_by_id_and_organisation_id(
                     organisation_id=organisation_id, id=data_agreement_id
@@ -545,6 +533,20 @@ async def handle_post_issue_credential(request: Request, context: V2RequestConte
                     f"Data agreement method of use is not data source"
                 )
 
+        else:
+            credential_offer = await context.legal_entity_service.issue_credential_with_disclosure_mapping(
+                issuance_mode=issue_credential_req.issuanceMode,
+                is_pre_authorised=issue_credential_req.isPreAuthorised,
+                user_pin=issue_credential_req.userPin,
+                organisation_id=organisation_id,
+                credential=credential,
+                disclosureMapping=disclosure_mapping,
+            )
+            credentialExchangeId = credential_offer["id"]
+            issuer_domain = context.legal_entity_service.issuer_domain
+            openid_credential_offer_uri = f"openid-credential-offer://?credential_offer_uri={issuer_domain}/organisation/{organisation_id}/service/credential-offer/{credentialExchangeId}"
+            credential_offer["credentialOffer"] = openid_credential_offer_uri
+
         return web.json_response(credential_offer, status=201)
     except ValidateDataAttributeValuesAgainstDataAttributesError as e:
         raise web.HTTPBadRequest(text=str(e))
@@ -559,9 +561,11 @@ async def handle_post_issue_credential(request: Request, context: V2RequestConte
 
 
 class UpdateCredentialOfferReq(BaseModel):
-    dataAttributeValues: list
-    dataAgreementId: constr(min_length=3, strip_whitespace=True)  # type: ignore
+    dataAttributeValues: Optional[list] = None
+    dataAgreementId: Optional[constr(min_length=3, strip_whitespace=True)] = None  # type: ignore
     limitedDisclosure: Optional[bool] = None
+    credential: Optional[dict] = None
+    disclosureMapping: Optional[dict] = None
 
 
 @config_routes.put(
@@ -580,44 +584,55 @@ async def handle_service_put_update_credential_offer(
     data = await request.json()
     update_credential_offer_req = UpdateCredentialOfferReq(**data)
     data_agreement_id = update_credential_offer_req.dataAgreementId
+    credential = update_credential_offer_req.credential
+    disclosure_mapping = update_credential_offer_req.disclosureMapping
 
     try:
-        with context.data_agreement_repository as repo:
-            data_agreement_model = repo.get_by_id_and_organisation_id(
-                organisation_id=organisation_id, id=data_agreement_id
-            )
-            if not data_agreement_model:
-                raise CreateCredentialOfferError(
-                    f"Credential schema with id {data_agreement_id} not found"
-                )
-
-            try:
-                is_valid_data_attribute_values = (
-                    validate_data_attribute_schema_against_data_attribute_values(
-                        data_agreement_model.dataAttributes,
-                        update_credential_offer_req.dataAttributeValues,
-                    )
-                )
-            except ValueError as e:
-                error_message = str(e)
-                return web.json_response({"error": error_message}, status=400)
-
-        if (
-            data_agreement_model.methodOfUse
-            == DataAgreementExchangeModes.DataSource.value
-        ):
-            credential_offer = await context.legal_entity_service.update_deferred_credential_offer_with_data_attribute_values(
+        if credential:
+            credential_offer = await context.legal_entity_service.update_deferred_credential_offer_with_disclosure_mapping(
                 credential_offer_id=credential_offer_id,
-                data_agreement_id=data_agreement_id,
-                data_attribute_values=update_credential_offer_req.dataAttributeValues,
-                limited_disclosure=update_credential_offer_req.limitedDisclosure,
+                credential=credential,
+                disclosureMapping=disclosure_mapping,
             )
 
             return web.json_response(credential_offer)
         else:
-            raise web.HTTPBadRequest(
-                text=str("Data agreement method of use must be data-source")
-            )
+            with context.data_agreement_repository as repo:
+                data_agreement_model = repo.get_by_id_and_organisation_id(
+                    organisation_id=organisation_id, id=data_agreement_id
+                )
+                if not data_agreement_model:
+                    raise CreateCredentialOfferError(
+                        f"Credential schema with id {data_agreement_id} not found"
+                    )
+
+                try:
+                    is_valid_data_attribute_values = (
+                        validate_data_attribute_schema_against_data_attribute_values(
+                            data_agreement_model.dataAttributes,
+                            update_credential_offer_req.dataAttributeValues,
+                        )
+                    )
+                except ValueError as e:
+                    error_message = str(e)
+                    return web.json_response({"error": error_message}, status=400)
+
+            if (
+                data_agreement_model.methodOfUse
+                == DataAgreementExchangeModes.DataSource.value
+            ):
+                credential_offer = await context.legal_entity_service.update_deferred_credential_offer_with_data_attribute_values(
+                    credential_offer_id=credential_offer_id,
+                    data_agreement_id=data_agreement_id,
+                    data_attribute_values=update_credential_offer_req.dataAttributeValues,
+                    limited_disclosure=update_credential_offer_req.limitedDisclosure,
+                )
+
+                return web.json_response(credential_offer)
+            else:
+                raise web.HTTPBadRequest(
+                    text=str("Data agreement method of use must be data-source")
+                )
     except ValidateDataAttributeValuesAgainstDataAttributesError as e:
         raise web.HTTPBadRequest(text=str(e))
     except UpdateCredentialOfferError as e:

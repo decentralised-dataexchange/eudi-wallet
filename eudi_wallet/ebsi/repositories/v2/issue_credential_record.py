@@ -22,11 +22,11 @@ class SqlAlchemyIssueCredentialRecordRepository:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        assert self.session is not None, "DB session not available"
         assert self.logger is not None, "Logger not available"
+        self.logger.error(f"Exception occurred: {exc_type}, {exc_val}")
+        assert self.session is not None, "DB session not available"
         if exc_tb is not None:
             self.session.rollback()
-            self.logger.error(f"Exception occurred: {exc_type}, {exc_val}")
             return False
 
         self.session.close()
