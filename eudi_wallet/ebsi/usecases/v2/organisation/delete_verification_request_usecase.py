@@ -29,6 +29,6 @@ class DeleteVerificationRequestUsecase:
             )
             if not is_deleted:
                 raise DeleteVerificationRequestUsecaseError(
-                    "Verification record is not deleted"
+                    "Verification record is not found"
                 )
         return is_deleted

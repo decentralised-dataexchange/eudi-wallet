@@ -71,7 +71,7 @@ async def handle_get_credential_record_by_reference(
 
 
 @service_routes.get(
-    "/organisation/{organisationId}/service/verification-request/{verification_record_id}",
+    "/organisation/{organisationId}/service/verification/{verification_record_id}",
     name="handle_get_verification_request_by_reference",
 )
 @v2_inject_request_context()
@@ -101,6 +101,7 @@ async def handle_get_verification_request_by_reference(
 
         verification_record = usecase.execute(
             verification_record_id=verification_record_id,
+            webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url
         )
         return web.Response(
             text=verification_record.vp_token_request, content_type="application/jwt"
@@ -288,6 +289,7 @@ async def handle_service_post_direct_post(request: Request, context: V2RequestCo
                         id_token_response_req.presentation_submission
                     )
                 },
+                webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url
             )
             return web.json_response(verification_record.to_dict())
 

@@ -68,9 +68,11 @@ from sdjwt.pex import (
 )
 from eudi_wallet.ebsi.usecases.v2.organisation.read_verification_request_usecase import (
     ReadVerificationRequestUsecase,
+    ReadVerificationRequestUsecaseError
 )
 from eudi_wallet.ebsi.usecases.v2.organisation.delete_verification_request_usecase import (
     DeleteVerificationRequestUsecase,
+    DeleteVerificationRequestUsecaseError
 )
 
 from eudi_wallet.ebsi.usecases.v2.organisation.list_verification_request_usecase import (
@@ -788,6 +790,7 @@ async def handle_post_create_verification_request(
             organisation_id=organisation_id,
             presentation_definition=request_body.presentationDefinition,
             requestByReference=request_body.requestByReference,
+            webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url
         )
         return web.json_response(verification_record.to_dict())
     except ValidationError as e:
@@ -829,6 +832,8 @@ async def handle_get_read_verification_history(
             verification_record_id=verification_record_id
         )
         return web.json_response(verification_record.to_dict())
+    except ReadVerificationRequestUsecaseError as e:
+        raise web.HTTPBadRequest(reason=str(e))
     except ValidationError as e:
         raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
     except PresentationDefinitionValidationError as e:
@@ -864,14 +869,13 @@ async def handle_delete_verification_history(
             logger=context.app_context.logger,
         )
 
-        is_deleted = usecase.execute(
+        usecase.execute(
             organisation_id=organisation_id,
             verification_record_id=verification_record_id,
         )
-        if is_deleted:
-            return web.json_response(status=204)
-        else:
-            return web.json_response(status=400)
+        return web.json_response(status=204)
+    except DeleteVerificationRequestUsecaseError as e:
+        raise web.HTTPBadRequest(reason=str(e))
     except ValidationError as e:
         raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
     except PresentationDefinitionValidationError as e:

@@ -103,7 +103,7 @@ class CreateVerificationRequestUsecase:
         if requestByReference:
             encoded_params = urllib.parse.urlencode(
                 {
-                    "request_uri": f"{domain}/organisation/{organisation_id}/service/verification-request/{verification_record_id}",
+                    "request_uri": f"{domain}/organisation/{organisation_id}/service/verification/{verification_record_id}",
                 }
             )
         else:
@@ -113,7 +113,7 @@ class CreateVerificationRequestUsecase:
                     "response_type": response_type,
                     "scope": scope,
                     "redirect_uri": redirect_uri,
-                    "request_uri": f"{domain}/organisation/{organisation_id}/service/verification-request/{verification_record_id}",
+                    "request_uri": f"{domain}/organisation/{organisation_id}/service/verification/{verification_record_id}",
                     "response_mode": response_mode,
                     "state": state,
                     "nonce": nonce,
