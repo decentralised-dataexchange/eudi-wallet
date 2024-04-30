@@ -33,9 +33,9 @@ class IssueCredentialRecordModel(Base):
         nullable=False,
     )
 
-    dataAttributeValues = Column(JSON, nullable=True, default="{}")
-    credential = Column(JSON, nullable=True, default="{}")
-    disclosureMapping = Column(JSON, nullable=True, default="{}")
+    dataAttributeValues = Column(JSON, nullable=True, default=[])
+    credential = Column(JSON, nullable=True, default={})
+    disclosureMapping = Column(JSON, nullable=True, default={})
 
     issuanceMode = Column(String, nullable=False)
     isPreAuthorised = Column(Boolean, default=False)
