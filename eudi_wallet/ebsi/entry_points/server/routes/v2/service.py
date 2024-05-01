@@ -42,6 +42,7 @@ from eudi_wallet.ebsi.usecases.v2.organisation.read_verification_request_by_refe
     ReadVerificationRequestByReferenceUsecase,
     ReadVerificationRequestByReferenceUsecaseError,
 )
+from eudi_wallet.holder.core import process_credential_offer_and_receive_credential
 
 service_routes = web.RouteTableDef()
 
@@ -101,7 +102,7 @@ async def handle_get_verification_request_by_reference(
 
         verification_record = usecase.execute(
             verification_record_id=verification_record_id,
-            webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url
+            webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url,
         )
         return web.Response(
             text=verification_record.vp_token_request, content_type="application/jwt"
@@ -116,7 +117,6 @@ async def handle_get_verification_request_by_reference(
 )
 @v2_inject_request_context(raise_exception_if_legal_entity_not_found=False)
 async def handle_service_get_well_known_openid_credential_issuer_configuration(
-
     request: Request,
     context: V2RequestContext,
 ):
@@ -289,7 +289,7 @@ async def handle_service_post_direct_post(request: Request, context: V2RequestCo
                         id_token_response_req.presentation_submission
                     )
                 },
-                webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url
+                webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url,
             )
             return web.json_response(verification_record.to_dict())
 
@@ -424,3 +424,34 @@ async def handle_service_post_credential_deferred_request(
         raise web.HTTPUnauthorized(reason=str(e))
 
     return web.json_response(credential_response)
+
+
+class ResolveCredentialOfferReq(BaseModel):
+    offer_uri: constr(min_length=1, strip_whitespace=True)  # type: ignore
+
+
+@service_routes.post(
+    "/organisation/{organisationId}/service/resolve-credential-offer",
+    name="handle_service_resolve_credential_offer",
+)
+@v2_inject_request_context()
+async def handle_service_resolve_credential_offer(
+    request: Request, context: V2RequestContext
+):
+    data = await request.json()
+
+    try:
+        req = ResolveCredentialOfferReq(**data)
+        (
+            credential_response,
+            deferred_endpoint,
+        ) = await process_credential_offer_and_receive_credential(req.offer_uri)
+        return web.json_response(
+            {
+                "acceptance_token": credential_response.acceptance_token,
+                "credential": credential_response.credential,
+                "deferred_endpoint": deferred_endpoint,
+            }
+        )
+    except ValidationError as e:
+        raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
