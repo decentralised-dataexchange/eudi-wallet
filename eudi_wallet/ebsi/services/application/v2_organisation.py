@@ -633,7 +633,7 @@ class V2OrganisationService:
         exp = int(time.time()) + 3600
         response_type = "id_token"
         response_mode = "direct_post"
-        client_id = self.auth_domain
+        client_id = f"{self.auth_domain}/organisation/{organisation_id}"
         redirect_uri = (
             f"{self.auth_domain}/organisation/{organisation_id}/service/direct_post"
         )
