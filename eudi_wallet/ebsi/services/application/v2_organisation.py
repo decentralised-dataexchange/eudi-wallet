@@ -51,7 +51,7 @@ from eudi_wallet.ebsi.services.domain.utils.authn import generate_code_challenge
 from eudi_wallet.ebsi.services.domain.utils.credential import (
     create_credential_token,
 )
-from eudi_wallet.ebsi.services.domain.utils.did import generate_and_store_did
+from eudi_wallet.ebsi.services.domain.utils.did import generate_and_store_did_v2
 from eudi_wallet.ebsi.utils.date_time import generate_ISO8601_UTC
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
 from eudi_wallet.ebsi.value_objects.application.organisation import (
@@ -125,10 +125,11 @@ class V2OrganisationService:
         with self.legal_entity_repository as repo:
             return repo.get_by_id(id=organisation_id)
 
-    async def set_cryptographic_seed(self, crypto_seed: str) -> None:
+    async def set_cryptographic_seed(self, crypto_seed: str, salt: str) -> None:
         self.crypto_seed = crypto_seed
-        self.eth, self.ebsi_did, self.key_did = await generate_and_store_did(
-            crypto_seed
+
+        self.eth, self.ebsi_did, self.key_did = await generate_and_store_did_v2(
+            crypto_seed=self.crypto_seed, salt=salt
         )
 
     async def set_entity(
@@ -399,9 +400,11 @@ class V2OrganisationService:
             "credentials": [
                 {
                     "format": format,
-                    "types": credential.get("type")
-                    if credential.get("type")
-                    else ["VerifiableCredential"],
+                    "types": (
+                        credential.get("type")
+                        if credential.get("type")
+                        else ["VerifiableCredential"]
+                    ),
                     "trust_framework": {
                         "name": "ebsi",
                         "type": "Accreditation",

@@ -32,6 +32,7 @@ class OrganisationModel(Base):
     description = Column(String(length=500), nullable=True)
     logo_url = Column(Text, nullable=True)
     cryptographic_seed = Column(String(length=500), nullable=False)
+    cryptographic_salt = Column(String(length=500), nullable=True,default=uuid.uuid4().hex)
     role = Column(String(length=200), nullable=False)
     location = Column(String(length=100), nullable=True)
     cover_image_url = Column(Text, nullable=True)

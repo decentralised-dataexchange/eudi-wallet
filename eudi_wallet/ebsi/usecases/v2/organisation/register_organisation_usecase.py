@@ -26,12 +26,14 @@ class RegisterOrganisationUsecase:
         cover_image_url: Optional[str] = None,
         webhook_url: Optional[str] = None,
         location: Optional[str] = None,
+        cryptographic_seed: Optional[str] = None,
     ) -> OrganisationModel:
         # Create an organistion in db
         with self.organisation_repository as repo:
             # mnemo = Mnemonic("english")
             # seed_phrase = mnemo.generate(strength=256)
-            cryptographic_seed = str(time.time())
+            if cryptographic_seed is None:
+                cryptographic_seed = str(time.time())
             return repo.create(
                 name=name,
                 cryptographic_seed=cryptographic_seed,

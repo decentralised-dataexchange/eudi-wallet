@@ -1,5 +1,6 @@
 import json
 from typing import Optional, cast
+import uuid
 
 from aiohttp import web
 from aiohttp.web_request import Request
@@ -58,7 +59,7 @@ from eudi_wallet.ebsi.exceptions.application.organisation import (
     CreateCredentialOfferError,
     UpdateCredentialOfferError,
 )
-from eudi_wallet.ebsi.services.domain.utils.did import generate_and_store_did
+from eudi_wallet.ebsi.services.domain.utils.did import generate_and_store_did_v2
 from eudi_wallet.ebsi.utils.common import (
     validate_data_attribute_schema_against_data_attribute_values,
 )
@@ -68,11 +69,11 @@ from sdjwt.pex import (
 )
 from eudi_wallet.ebsi.usecases.v2.organisation.read_verification_request_usecase import (
     ReadVerificationRequestUsecase,
-    ReadVerificationRequestUsecaseError
+    ReadVerificationRequestUsecaseError,
 )
 from eudi_wallet.ebsi.usecases.v2.organisation.delete_verification_request_usecase import (
     DeleteVerificationRequestUsecase,
-    DeleteVerificationRequestUsecaseError
+    DeleteVerificationRequestUsecaseError,
 )
 
 from eudi_wallet.ebsi.usecases.v2.organisation.list_verification_request_usecase import (
@@ -90,8 +91,23 @@ config_routes = web.RouteTableDef()
 async def handle_config_get_organisation_identifier(
     request: Request, context: V2RequestContext
 ):
-    _, ebsi_did, key_did = await generate_and_store_did(
-        context.legal_entity_service.legal_entity_entity.cryptographic_seed
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation id")
+
+    if context.legal_entity_service.legal_entity_entity.cryptographic_salt is None:
+        usecase = UpdateOrganisationUsecase(
+            organisation_repository=context.organisation_repository,
+            logger=context.app_context.logger,
+        )
+        organisation = usecase.execute(
+            organisation_id=organisation_id,
+            name=context.legal_entity_service.legal_entity_entity.name,
+            cryptographic_salt=uuid.uuid4().hex,
+        )
+    _, ebsi_did, key_did = await generate_and_store_did_v2(
+        context.legal_entity_service.legal_entity_entity.cryptographic_seed,
+        salt=context.legal_entity_service.legal_entity_entity.cryptographic_salt,
     )
 
     resp = {
@@ -113,6 +129,7 @@ class RegisterOrganisationReq(BaseModel):
         constr(min_length=1, max_length=500, strip_whitespace=True)  # type: ignore
     ] = None
     webhookUrl: Optional[HttpUrl] = None
+    cryptographicSeed: Optional[str] = None
 
 
 @config_routes.post(
@@ -146,6 +163,7 @@ async def handle_config_post_register_organisation(
             cover_image_url=cover_image_url,
             webhook_url=webhook_url,
             location=register_organisation_req.location,
+            cryptographic_seed=register_organisation_req.cryptographicSeed,
         )
 
         return web.json_response(organisation.to_dict())
@@ -199,6 +217,7 @@ class UpdateOrganisationReq(BaseModel):
         constr(min_length=1, max_length=500, strip_whitespace=True)  # type: ignore
     ] = None
     webhookUrl: Optional[HttpUrl] = None
+    cryptographicSeed: Optional[str] = None
 
 
 @config_routes.put(
@@ -226,6 +245,7 @@ async def handle_config_put_update_organisation(
         logo_url = str(update_organisation_req.logoUrl)
         cover_image_url = str(update_organisation_req.coverImageUrl)
         webhook_url = str(update_organisation_req.webhookUrl)
+        cryptographic_seed = update_organisation_req.cryptographicSeed
         organisation = usecase.execute(
             organisation_id=organisation_id,
             name=update_organisation_req.name,
@@ -234,6 +254,7 @@ async def handle_config_put_update_organisation(
             cover_image_url=cover_image_url,
             webhook_url=webhook_url,
             location=update_organisation_req.location,
+            cryptographic_seed=cryptographic_seed,
         )
         if not organisation:
             raise web.HTTPBadRequest(reason="Organisation not found")

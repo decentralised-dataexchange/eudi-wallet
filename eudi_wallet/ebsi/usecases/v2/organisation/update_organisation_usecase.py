@@ -21,6 +21,8 @@ class UpdateOrganisationUsecase:
         cover_image_url: Optional[str] = None,
         webhook_url: Optional[str] = None,
         location: Optional[str] = None,
+        cryptographic_seed: Optional[str] = None,
+        cryptographic_salt: Optional[str] = None,
     ) -> OrganisationModel:
         # Update an organisation
         with self.organisation_repository as repo:
@@ -32,4 +34,6 @@ class UpdateOrganisationUsecase:
                 cover_image_url=cover_image_url,
                 webhook_url=webhook_url,
                 location=location,
+                cryptographic_seed=cryptographic_seed,
+                cryptographic_salt=cryptographic_salt,
             )

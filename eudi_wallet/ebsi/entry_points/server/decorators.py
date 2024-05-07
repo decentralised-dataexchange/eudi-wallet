@@ -1,6 +1,7 @@
 import dataclasses
 from functools import wraps
 from typing import Optional, Tuple
+import uuid
 
 from aiohttp import web
 
@@ -191,7 +192,7 @@ def v2_inject_request_context(
                         raise web.HTTPBadRequest(text="Legal entity not found")
                     else:
                         await legal_entity_service.set_cryptographic_seed(
-                            crypto_seed=legal_entity_entity.cryptographic_seed  # type: ignore
+                            crypto_seed=legal_entity_entity.cryptographic_seed, salt = legal_entity_entity.cryptographic_salt  # type: ignore
                         )
                         await legal_entity_service.set_entity(
                             legal_entity_entity=legal_entity_entity
