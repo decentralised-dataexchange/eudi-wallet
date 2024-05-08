@@ -79,6 +79,9 @@ from eudi_wallet.ebsi.usecases.v2.organisation.delete_verification_request_useca
 from eudi_wallet.ebsi.usecases.v2.organisation.list_verification_request_usecase import (
     ListVerificationRequestUsecase,
 )
+from eudi_wallet.ebsi.entry_points.server.v2_well_known import (
+    validate_credential_type_based_on_disclosure_mapping
+)
 
 config_routes = web.RouteTableDef()
 
@@ -576,6 +579,8 @@ async def handle_post_issue_credential(request: Request, context: V2RequestConte
                 )
 
         else:
+            assert credential.get("type", []) is not None
+            credential = validate_credential_type_based_on_disclosure_mapping(credential=credential,disclosure_mapping=disclosure_mapping)
             credential_offer = await context.legal_entity_service.issue_credential_with_disclosure_mapping(
                 issuance_mode=issue_credential_req.issuanceMode,
                 is_pre_authorised=issue_credential_req.isPreAuthorised,

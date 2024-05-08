@@ -120,15 +120,17 @@ async def handle_service_get_well_known_openid_credential_issuer_configuration(
     request: Request,
     context: V2RequestContext,
 ):
+    assert context.app_context.db_session is not None
     organisation_id = request.match_info.get("organisationId")
     if organisation_id is None:
         raise web.HTTPBadRequest(reason="Invalid organisation id")
+    
     res = service_get_well_known_openid_credential_issuer_config(
-        context.app_context.domain,
-        organisation_id,
-        context.app_context.logger,
+        wallet_domain=context.app_context.domain,
+        organisation_id=organisation_id,
+        logger=context.app_context.logger,
+        session=context.app_context.db_session,
         legal_entity_repository=context.organisation_repository,
-        data_agreement_repository=context.data_agreement_repository,
     )
     return web.json_response(res)
 

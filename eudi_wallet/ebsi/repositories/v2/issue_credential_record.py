@@ -229,6 +229,19 @@ class SqlAlchemyIssueCredentialRecordRepository:
             )
             .all()
         )
+    
+    def get_all_by_organisation_id_and_with_credential(
+        self, organisation_id: str
+    ) -> List[IssueCredentialRecordModel]:
+        assert self.session is not None
+        return (
+            self.session.query(IssueCredentialRecordModel)
+            .filter(
+                IssueCredentialRecordModel.organisationId == organisation_id,
+                IssueCredentialRecordModel.dataAgreementId == None
+            )
+            .all()
+        )
 
     def get_all_by_data_agreement_id(
         self, data_agreement_id: str
