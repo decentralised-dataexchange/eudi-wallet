@@ -12,6 +12,8 @@ from eudi_wallet.ebsi.entry_points.server.decorators import (
 from eudi_wallet.ebsi.entry_points.server.v2_well_known import (
     service_get_well_known_openid_credential_issuer_config,
     service_get_well_known_authn_openid_config,
+    service_get_well_known_openid_credential_issuer_config_v2,
+    service_get_well_known_authn_openid_config_v2,
 )
 from eudi_wallet.ebsi.utils.jwt import decode_header_and_claims_in_jwt
 from eudi_wallet.ebsi.exceptions.application.organisation import (
@@ -457,3 +459,212 @@ async def handle_service_resolve_credential_offer(
         )
     except ValidationError as e:
         raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
+
+
+@service_routes.get(
+    "/organisation/{organisationId}/service/digital-wallet/openid/sdjwt/credential/history/{credential_offer_id}",
+    name="handle_service_read_credential_record_by_reference",
+)
+@v2_inject_request_context()
+async def handle_service_read_credential_record_by_reference(
+    request: Request, context: V2RequestContext
+):
+    credential_record_by_reference = await handle_get_credential_record_by_reference(
+        request=request
+    )
+    credential_record_dict = json.loads(credential_record_by_reference._body)
+    old_credential_issuer = credential_record_dict.get("credential_issuer")
+    credential_issuer = old_credential_issuer + "/digital-wallet/openid"
+    credential_record_dict["credential_issuer"] = credential_issuer
+    updated_credential_history_dict = json.dumps(credential_record_dict)
+
+    credential_record_by_reference._body = updated_credential_history_dict.encode(
+        "utf-8"
+    )
+
+    return credential_record_by_reference
+
+
+@service_routes.get(
+    "/organisation/{organisationId}/service/digital-wallet/openid/sdjwt/verification/history/{verification_record_id}",
+    name="handle_service_read_verification_request_by_reference",
+)
+@v2_inject_request_context()
+async def handle_service_read_verification_request_by_reference(
+    request: Request, context: V2RequestContext
+):
+    return await handle_get_verification_request_by_reference(request=request)
+
+
+@service_routes.get(
+    "/organisation/{organisationId}/service/digital-wallet/openid/.well-known/openid-credential-issuer",
+    name="handle_service_read_well_known_openid_credential_issuer_configuration_v2",
+)
+@v2_inject_request_context(raise_exception_if_legal_entity_not_found=False)
+async def handle_service_read_well_known_openid_credential_issuer_configuration_v2(
+    request: Request,
+    context: V2RequestContext,
+):
+    assert context.app_context.db_session is not None
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation id")
+
+    res = service_get_well_known_openid_credential_issuer_config_v2(
+        wallet_domain=context.app_context.domain,
+        organisation_id=organisation_id,
+        logger=context.app_context.logger,
+        session=context.app_context.db_session,
+        legal_entity_repository=context.organisation_repository,
+    )
+    return web.json_response(res)
+
+
+@service_routes.get(
+    "/organisation/{organisationId}/service/digital-wallet/openid/.well-known/oauth-authorization-server",
+    name="handle_service_read_well_known_oauth_authorization_server_v2",
+)
+@v2_inject_request_context(raise_exception_if_legal_entity_not_found=False)
+async def handle_service_read_well_known_oauth_authorization_server_v2(
+    request: Request, context: V2RequestContext
+):
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation id")
+
+    res = service_get_well_known_authn_openid_config_v2(
+        context.app_context.domain, organisation_id=organisation_id
+    )
+    return web.json_response(res)
+
+
+@service_routes.get(
+    "/organisation/{organisationId}/service/digital-wallet/openid/.well-known/openid-configuration",
+    name="handle_service_read_well_known_openid_configuration_v2",
+)
+@v2_inject_request_context(raise_exception_if_legal_entity_not_found=False)
+async def handle_service_read_well_known_openid_configuration_v2(
+    request: Request, context: V2RequestContext
+):
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation id")
+
+    res = service_get_well_known_authn_openid_config_v2(
+        context.app_context.domain, organisation_id=organisation_id
+    )
+    return web.json_response(res)
+
+
+@service_routes.get(
+    "/organisation/{organisationId}/service/digital-wallet/openid/authorize",
+    name="handle_service_read_authorize_v2",
+)
+@v2_inject_request_context()
+async def handle_service_read_authorize_v2(request: Request, context: V2RequestContext):
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation id")
+
+    query_params = request.rel_url.query
+    auth_req = AuthorizationRequestQueryParams.from_dict(query_params)
+
+    issuer_state = auth_req.issuer_state
+    state = auth_req.state
+    client_id = auth_req.client_id
+    code_challenge = auth_req.code_challenge
+    code_challenge_method = auth_req.code_challenge_method
+    authorisation_request = auth_req.request
+    redirect_uri = auth_req.redirect_uri
+    scope = auth_req.scope
+    request = auth_req.request
+
+    try:
+        credential_offer_entity = await context.legal_entity_service.v2_update_credential_offer_from_authorisation_request(
+            issuer_state=issuer_state,
+            authorisation_request_state=state,
+            client_id=client_id,
+            code_challenge=code_challenge,
+            code_challenge_method=code_challenge_method,
+            redirect_uri=redirect_uri,
+            authn_request=request,
+        )
+        if not credential_offer_entity:
+            raise web.HTTPBadRequest(text="Credential offer not found")
+
+        if authorisation_request:
+            authn_req_decoded = decode_header_and_claims_in_jwt(authorisation_request)
+            client_metadata = authn_req_decoded.claims.get("client_metadata")
+        else:
+            client_metadata = json.loads(auth_req.client_metadata)
+
+        if scope == "openid ver_test:vp_token":
+            raise web.HTTPBadRequest(text="Credential offer doesn't exist")
+        else:
+            redirect_url = await context.legal_entity_service.v2_prepare_redirect_url_with_id_token_request(
+                credential_offer_id=str(credential_offer_entity.id),
+                client_metadata=client_metadata,
+                organisation_id=organisation_id,
+                redirect_uri_suffix="service/digital-wallet/openid/direct_post",
+            )
+    except CredentialOfferIsPreAuthorizedError as e:
+        raise web.HTTPBadRequest(text=str(e))
+    except UpdateCredentialOfferError as e:
+        raise web.HTTPBadRequest(text=str(e))
+
+    response = web.Response(status=302)
+    response.headers["Location"] = redirect_url
+    return response
+
+
+@service_routes.post(
+    "/organisation/{organisationId}/service/digital-wallet/openid/direct_post",
+    name="handle_service_post_direct_post_v2",
+)
+@v2_inject_request_context()
+async def handle_service_post_direct_post_v2(
+    request: Request, context: V2RequestContext
+):
+    return await handle_service_post_direct_post(request=request)
+
+
+@service_routes.post(
+    "/organisation/{organisationId}/service/digital-wallet/openid/token",
+    name="handle_service_post_token_v2",
+)
+@v2_inject_request_context()
+async def handle_service_post_token_v2(request: Request, context: V2RequestContext):
+    return await handle_service_post_token(request=request)
+
+
+@service_routes.post(
+    "/organisation/{organisationId}/service/digital-wallet/openid/sdjwt/credential",
+    name="handle_service_post_credential_request_v2",
+)
+@v2_inject_request_context()
+async def handle_service_post_credential_request_v2(
+    request: Request, context: V2RequestContext
+):
+    return await handle_service_post_credential_request(request=request)
+
+
+@service_routes.post(
+    "/organisation/{organisationId}/service/digital-wallet/openid/sdjwt/credential_deferred",
+    name="handle_service_post_credential_deferred_request_v2",
+)
+@v2_inject_request_context()
+async def handle_service_post_credential_deferred_request_v2(
+    request: Request, context: V2RequestContext
+):
+    return await handle_service_post_credential_deferred_request(request=request)
+
+
+@service_routes.post(
+    "/organisation/{organisationId}/service/digital-wallet/openid/sdjwt/credential/resolve-credential-offer",
+    name="handle_service_resolve_credential_offer_v2",
+)
+@v2_inject_request_context()
+async def handle_service_resolve_credential_offer_v2(
+    request: Request, context: V2RequestContext
+):
+    return await handle_service_resolve_credential_offer(request=request)

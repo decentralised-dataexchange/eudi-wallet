@@ -620,6 +620,7 @@ class V2OrganisationService:
         credential_offer_id: str,
         client_metadata: dict,
         organisation_id: str,
+        redirect_uri_suffix: str = None,
     ) -> str:
         assert self.auth_domain is not None, "Auth domain not found"
         assert (
@@ -637,9 +638,14 @@ class V2OrganisationService:
         response_type = "id_token"
         response_mode = "direct_post"
         client_id = f"{self.auth_domain}/organisation/{organisation_id}"
-        redirect_uri = (
-            f"{self.auth_domain}/organisation/{organisation_id}/service/direct_post"
-        )
+        if redirect_uri_suffix:
+            redirect_uri = (
+                f"{self.auth_domain}/organisation/{organisation_id}/" + redirect_uri_suffix
+            )
+        else:
+            redirect_uri = (
+                f"{self.auth_domain}/organisation/{organisation_id}/service/direct_post"
+            )
         scope = "openid"
         # nonce = auth_req.issuer_state
         nonce = str(uuid.uuid4())

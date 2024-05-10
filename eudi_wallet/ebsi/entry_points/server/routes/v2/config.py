@@ -19,6 +19,9 @@ from eudi_wallet.ebsi.value_objects.application.organisation import (
 from eudi_wallet.ebsi.usecases.v2.organisation.create_verification_request_usecase import (
     CreateVerificationRequestUsecase,
 )
+from eudi_wallet.ebsi.usecases.v2.organisation.create_verification_request_usecase_v2 import (
+    CreateVerificationRequestUsecaseV2,
+)
 from eudi_wallet.ebsi.usecases.v2.organisation.register_organisation_usecase import (
     RegisterOrganisationUsecase,
 )
@@ -944,3 +947,270 @@ async def handle_list_verification_history(request: Request, context: V2RequestC
         raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
     except PresentationDefinitionValidationError as e:
         raise web.HTTPBadRequest(reason=str(e))
+
+
+@config_routes.post(
+    "/config/digital-wallet/openid", name="handle_config_post_deploy_openid"
+)  # type: ignore
+@v2_inject_request_context(
+    raise_exception_if_legal_entity_not_found=False,
+    raise_exception_if_not_legal_entity_path_param=False,
+)
+async def handle_config_post_deploy_openid(request: Request, context: V2RequestContext):
+    return await handle_config_post_register_organisation(request)
+
+
+@config_routes.get(
+    "/organisation/{organisationId}/config/digital-wallet/openid",
+    name="handle_config_read_openid_deployment",
+)  # type: ignore
+@v2_inject_request_context(raise_exception_if_legal_entity_not_found=False)
+async def handle_config_read_openid_deployment(
+    request: Request, context: V2RequestContext
+):
+    return await handle_config_get_read_organisation(request)
+
+
+@config_routes.put(
+    "/organisation/{organisationId}/config/digital-wallet/openid",
+    name="handle_config_put_update_openid_digital_wallet",
+)  # type: ignore
+@v2_inject_request_context(raise_exception_if_legal_entity_not_found=False)
+async def handle_config_put_update_openid_digital_wallet(
+    request: Request, context: V2RequestContext
+):
+    return await handle_config_put_update_organisation(request)
+
+
+@config_routes.delete(
+    "/organisation/{organisationId}/config/digital-wallet/openid",
+    name="handle_config_delete_openid_deployment",
+)  # type: ignore
+@v2_inject_request_context(raise_exception_if_legal_entity_not_found=False)
+async def handle_config_delete_openid_deployment(
+    request: Request, context: V2RequestContext
+):
+    return await handle_config_delete_delete_organisation(request)
+
+
+@config_routes.get(
+    "/organisation/{organisationId}/config/digital-wallet/openid/organisation-identifier",
+    name="handle_config_read__openid_organisation_identifier",
+)
+@v2_inject_request_context()
+async def handle_config_read__openid_organisation_identifier(
+    request: Request, context: V2RequestContext
+):
+    return await handle_config_get_organisation_identifier(request)
+
+
+@config_routes.post(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/credential/issue",
+    name="handle_post_issue_credential_v2",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_post_issue_credential_v2(request: Request, context: V2RequestContext):
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation id")
+
+    issue_credential_response = await handle_post_issue_credential(request)
+
+    issue_credential_response_dict = json.loads(issue_credential_response._body)
+    credentialExchangeId = issue_credential_response_dict.get("id")
+    issue_credential_response_dict["credentialExchangeId"] = credentialExchangeId
+
+    issuer_domain = context.legal_entity_service.issuer_domain
+    openid_credential_offer_uri = f"openid-credential-offer://?credential_offer_uri={issuer_domain}/organisation/{organisation_id}/service/digital-wallet/openid/sdjwt/credential/history/{credentialExchangeId}"
+    issue_credential_response_dict["credentialOffer"] = openid_credential_offer_uri
+
+    credential_history = {"credentialHistory": issue_credential_response_dict}
+    updated_issue_credential_response_dict = json.dumps(credential_history)
+    issue_credential_response._body = updated_issue_credential_response_dict.encode(
+        "utf-8"
+    )
+    return issue_credential_response
+
+
+@config_routes.put(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/credential/history/{credentialOfferId}",
+    name="handle_config_update_credential_history",
+)
+@v2_inject_request_context()
+async def handle_config_update_credential_history(
+    request: Request, context: V2RequestContext
+):
+    update_credential_history_response = (
+        await handle_service_put_update_credential_offer(request)
+    )
+
+    update_credential_history_dict = json.loads(
+        update_credential_history_response._body
+    )
+    update_credential_history_dict["credentialExchangeId"] = (
+        update_credential_history_dict.get("id")
+    )
+    credential_history = {"credentialHistory": update_credential_history_dict}
+    updated_update_credential_history_dict = json.dumps(credential_history)
+    update_credential_history_response._body = (
+        updated_update_credential_history_dict.encode("utf-8")
+    )
+    return update_credential_history_response
+
+
+@config_routes.get(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/credential/history/{credentialOfferId}",
+    name="handle_config_read_credential_history",
+)
+@v2_inject_request_context()
+async def handle_config_read_credential_history(
+    request: Request, context: V2RequestContext
+):
+    read_credential_history_resp = (
+        await handle_config_get_credential_offer_by_id_and_credential_schema_id(request)
+    )
+
+    read_credential_history_dict = json.loads(read_credential_history_resp._body)
+    read_credential_history_dict["credentialExchangeId"] = (
+        read_credential_history_dict.get("id")
+    )
+    credential_history = {"credentialHistory": read_credential_history_dict}
+    updated_read_credential_history_dict = json.dumps(credential_history)
+    read_credential_history_resp._body = updated_read_credential_history_dict.encode(
+        "utf-8"
+    )
+
+    return read_credential_history_resp
+
+
+@config_routes.delete(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/credential/history/{credentialOfferId}",
+    name="handle_config_delete_credential_history",
+)
+@v2_inject_request_context()
+async def handle_config_delete_credential_history(
+    request: Request, context: V2RequestContext
+):
+    return await handle_config_delete_credential_offer(request)
+
+
+@config_routes.get(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/credential/history",
+    name="handle_config_list_credential_history",
+)
+@v2_inject_request_context()
+async def handle_config_list_credential_history(
+    request: Request, context: V2RequestContext
+):
+    response_body = await handle_config_get_all_credential_offers(request)
+    credential_histories = json.loads(response_body._body)
+    for credential_history in credential_histories:
+        credential_history["credentialExchangeId"] = credential_history.get("id")
+    credential_history = {"credentialHistory": credential_histories}
+    updated_credential_histories = json.dumps(credential_history)
+    response_body._body = updated_credential_histories.encode("utf-8")
+    return response_body
+
+
+@config_routes.post(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/verification/send",
+    name="handle_config_send_verification_request",
+)
+@v2_inject_request_context()
+async def handle_config_send_verification_request(
+    request: Request, context: V2RequestContext
+):
+    assert context.app_context.db_session is not None
+    assert context.app_context.logger is not None
+    assert context.app_context.domain is not None
+    assert context.legal_entity_service is not None
+    repository = SqlAlchemyVerificationRecordRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+
+    # Validate organisation ID in the path parameter
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation id")
+
+    try:
+        data = await request.json()
+        request_body = CreateVerificationReq(**data)
+
+        # Validate presentation definition
+        validate_and_deserialise_presentation_definition(
+            presentation_definition=request_body.presentationDefinition
+        )
+
+        usecase = CreateVerificationRequestUsecaseV2(
+            repository=repository,
+            logger=context.app_context.logger,
+        )
+
+        _, verification_record = usecase.execute(
+            key_did=context.legal_entity_service.key_did,
+            domain=context.app_context.domain,
+            organisation_id=organisation_id,
+            presentation_definition=request_body.presentationDefinition,
+            requestByReference=request_body.requestByReference,
+            webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url,
+        )
+
+        verification_record_dict = verification_record.to_dict()
+        verification_record_dict["presentationExchangeId"] = (
+            verification_record_dict.get("id")
+        )
+        verification_history = {"verificationHistory": verification_record_dict}
+        return web.json_response(verification_history)
+    except ValidationError as e:
+        raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
+    except PresentationDefinitionValidationError as e:
+        raise web.HTTPBadRequest(reason=str(e))
+
+
+@config_routes.get(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/verification/history/{verificationRecordId}",
+    name="handle_config_read_verification_history",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_config_read_verification_history(
+    request: Request, context: V2RequestContext
+):
+    response_body = await handle_get_read_verification_history(request=request)
+    read_verification_history_dict = json.loads(response_body._body)
+    read_verification_history_dict["presentationExchangeId"] = (
+        read_verification_history_dict.get("id")
+    )
+    verification_history = {"verificationHistory": read_verification_history_dict}
+    updated_read_verification_history_dict = json.dumps(verification_history)
+    response_body._body = updated_read_verification_history_dict.encode("utf-8")
+    return response_body
+
+
+@config_routes.delete(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/verification/history/{verificationRecordId}",
+    name="handle_config_delete_verification_history",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_config_delete_verification_history(
+    request: Request, context: V2RequestContext
+):
+    return await handle_delete_verification_history(request=request)
+
+
+@config_routes.get(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/verification/history",
+    name="handle_config_list_verification_history",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_config_list_verification_history(
+    request: Request, context: V2RequestContext
+):
+    response_body = await handle_list_verification_history(request=request)
+    verification_histories = json.loads(response_body._body)
+    for verification_history in verification_histories:
+        verification_history["presentationExchangeId"] = verification_history.get("id")
+    verification_history = {"verificationHistory": verification_histories}
+    updated_verification_histories = json.dumps(verification_history)
+    response_body._body = updated_verification_histories.encode("utf-8")
+    return response_body
