@@ -134,7 +134,7 @@ def validate_credential_type_based_on_disclosure_mapping(
         credential_type = add_or_replace_suffix(credential_type, "Jwt", "SdJwt")
         credential_types[-1] = credential_type
     else:
-        credential_type = add_or_replace_suffix(credential_type, "SdJwt", "Jwt")
+        credential_type = add_or_replace_suffix(credential_type, "SdJwt", "")
         credential_types[-1] = credential_type
     credential["type"] = credential_types
     return credential
