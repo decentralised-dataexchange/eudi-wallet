@@ -766,7 +766,7 @@ async def handle_config_get_all_credential_offers(
         [
             {
                 **credential_offer_entity.to_dict(),
-                "credentialLabel": credential_offer_entity.get("credential", {})
+                "credentialLabel": credential_offer_entity.to_dict().get("credential", {})
                 .get("type", [])[-1]
                 .removesuffix("SdJwt"),
             }
