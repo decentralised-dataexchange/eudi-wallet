@@ -144,11 +144,11 @@ def create_credential_supported_from_credential_offers(credential_offers: list) 
     for credential_offer in credential_offers:
         credential_types = credential_offer.credential.get("type", [])
         if credential_types:
-            credential = validate_credential_type_based_on_disclosure_mapping(
-                credential=credential_offer.credential,
-                disclosure_mapping=credential_offer.disclosureMapping,
-            )
-            credential_types = credential.get("type", [])
+            # credential = validate_credential_type_based_on_disclosure_mapping(
+            #     credential=credential_offer.credential,
+            #     disclosure_mapping=credential_offer.disclosureMapping,
+            # )
+            credential_types = credential_offer.credential.get("type", [])
 
             if credential_offer.disclosureMapping:
                 format = "vc+sd-jwt"
@@ -161,7 +161,7 @@ def create_credential_supported_from_credential_offers(credential_offers: list) 
                 "cryptographic_suites_supported": ["ES256"],
                 "display": [
                     {
-                        "name": credential_types[-1].removesuffix("SdJwt"),
+                        "name": credential_types[-1],
                         "locale": "en-GB",
                         "background_color": "#12107c",
                         "text_color": "#FFFFFF",
