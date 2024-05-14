@@ -27,7 +27,6 @@ def service_get_well_known_openid_credential_issuer_config(
     assert issue_credential_repository is not None
 
     with issue_credential_repository as credential_repo:
-
         credential_offers = (
             credential_repo.get_all_by_organisation_id_and_with_credential(
                 organisation_id=organisation_id
@@ -162,7 +161,7 @@ def create_credential_supported_from_credential_offers(credential_offers: list) 
                 "cryptographic_suites_supported": ["ES256"],
                 "display": [
                     {
-                        "name": credential_types[-1],
+                        "name": credential_types[-1].removesuffix("SdJwt"),
                         "locale": "en-GB",
                         "background_color": "#12107c",
                         "text_color": "#FFFFFF",
@@ -192,7 +191,6 @@ def service_get_well_known_openid_credential_issuer_config_v2(
     assert issue_credential_repository is not None
 
     with issue_credential_repository as credential_repo:
-
         credential_offers = (
             credential_repo.get_all_by_organisation_id_and_with_credential(
                 organisation_id=organisation_id
@@ -274,4 +272,3 @@ def service_get_well_known_authn_openid_config_v2(
             "attester_signed_id_token",
         ],
     }
-

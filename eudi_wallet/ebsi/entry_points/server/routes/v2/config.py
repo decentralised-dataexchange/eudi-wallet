@@ -83,7 +83,7 @@ from eudi_wallet.ebsi.usecases.v2.organisation.list_verification_request_usecase
     ListVerificationRequestUsecase,
 )
 from eudi_wallet.ebsi.entry_points.server.v2_well_known import (
-    validate_credential_type_based_on_disclosure_mapping
+    validate_credential_type_based_on_disclosure_mapping,
 )
 
 config_routes = web.RouteTableDef()
@@ -583,7 +583,9 @@ async def handle_post_issue_credential(request: Request, context: V2RequestConte
 
         else:
             assert credential.get("type", []) is not None
-            credential = validate_credential_type_based_on_disclosure_mapping(credential=credential,disclosure_mapping=disclosure_mapping)
+            credential = validate_credential_type_based_on_disclosure_mapping(
+                credential=credential, disclosure_mapping=disclosure_mapping
+            )
             credential_offer = await context.legal_entity_service.issue_credential_with_disclosure_mapping(
                 issuance_mode=issue_credential_req.issuanceMode,
                 is_pre_authorised=issue_credential_req.isPreAuthorised,
@@ -597,6 +599,10 @@ async def handle_post_issue_credential(request: Request, context: V2RequestConte
             openid_credential_offer_uri = f"openid-credential-offer://?credential_offer_uri={issuer_domain}/organisation/{organisation_id}/service/credential-offer/{credentialExchangeId}"
             credential_offer["credentialOffer"] = openid_credential_offer_uri
 
+            # FIXME: Dyanmically create credential label from credential type
+            credential_offer["credentialLabel"] = credential.get("type", [])[
+                -1
+            ].removesuffix("SdJwt")
         return web.json_response(credential_offer, status=201)
     except ValidateDataAttributeValuesAgainstDataAttributesError as e:
         raise web.HTTPBadRequest(text=str(e))
@@ -644,7 +650,12 @@ async def handle_service_put_update_credential_offer(
                 credential=credential,
                 disclosureMapping=disclosure_mapping,
             )
-
+            # FIXME: Dyanmically create credential label from credential type
+            credential_offer["credentialLabel"] = (
+                credential_offer.get("credential", {})
+                .get("type", [])[-1]
+                .removesuffix("SdJwt")
+            )
             return web.json_response(credential_offer)
         else:
             with context.data_agreement_repository as repo:
@@ -718,6 +729,13 @@ async def handle_config_get_credential_offer_by_id_and_credential_schema_id(
     if credential_offer_entity is None:
         raise web.HTTPBadRequest(text="Credential offer not found")
 
+    # FIXME: Dyanmically create credential label from credential type
+    credential_offer_entity["credentialLabel"] = (
+        credential_offer_entity.get("credential", {})
+        .get("type", [])[-1]
+        .removesuffix("SdJwt")
+    )
+
     return web.json_response(credential_offer_entity.to_dict())
 
 
@@ -742,9 +760,16 @@ async def handle_config_get_all_credential_offers(
         credential_offers = await context.legal_entity_service.get_all_credential_offers_by_organisation_id(
             organisation_id=organisation_id
         )
+
+    # FIXME: Dyanmically create credential label from credential type
     return web.json_response(
         [
-            credential_offer_entity.to_dict()
+            {
+                **credential_offer_entity.to_dict(),
+                "credentialLabel": credential_offer_entity.get("credential", {})
+                .get("type", [])[-1]
+                .removesuffix("SdJwt"),
+            }
             for credential_offer_entity in credential_offers
         ]
     )
@@ -819,7 +844,7 @@ async def handle_post_create_verification_request(
             organisation_id=organisation_id,
             presentation_definition=request_body.presentationDefinition,
             requestByReference=request_body.requestByReference,
-            webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url
+            webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url,
         )
         return web.json_response(verification_record.to_dict())
     except ValidationError as e:
