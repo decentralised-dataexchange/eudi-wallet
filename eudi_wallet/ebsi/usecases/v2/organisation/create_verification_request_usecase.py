@@ -78,7 +78,7 @@ class CreateVerificationRequestUsecase:
         exp = int(time.time()) + 3600
         response_type = "vp_token"
         response_mode = "direct_post"
-        client_id = domain
+        client_id = f"{domain}/organisation/{organisation_id}/service"
         redirect_uri = f"{domain}/organisation/{organisation_id}/service/direct_post"
         scope = "openid"
         nonce = str(uuid.uuid4())
