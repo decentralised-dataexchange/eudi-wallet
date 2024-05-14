@@ -1,6 +1,6 @@
 from eudi_wallet.ebsi.repositories.organisation import SqlAlchemyOrganisationRepository
 from logging import Logger
-
+import re
 from sqlalchemy.orm import Session
 from eudi_wallet.ebsi.exceptions.application.organisation import (
     LegalEntityNotFoundError,
@@ -139,6 +139,14 @@ def validate_credential_type_based_on_disclosure_mapping(
     return credential
 
 
+def split_camel_case_and_concatenate_by_space(s):
+    words = s.split()
+    if len(words) > 0:
+        return " ".join(re.findall(r"[A-Za-z][a-z]*|[A-Z]+(?=[A-Z]|$)", s))
+    else:
+        return s
+
+
 def create_credential_supported_from_credential_offers(credential_offers: list) -> dict:
     credentials_supported = {}
     for credential_offer in credential_offers:
@@ -161,7 +169,7 @@ def create_credential_supported_from_credential_offers(credential_offers: list) 
                 "cryptographic_suites_supported": ["ES256"],
                 "display": [
                     {
-                        "name": credential_types[-1],
+                        "name": split_camel_case_and_concatenate_by_space(credential_types[-1]),
                         "locale": "en-GB",
                         "background_color": "#12107c",
                         "text_color": "#FFFFFF",
