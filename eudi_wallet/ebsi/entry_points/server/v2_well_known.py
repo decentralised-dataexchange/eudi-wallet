@@ -169,7 +169,7 @@ def create_credential_supported_from_credential_offers(credential_offers: list) 
                 "cryptographic_suites_supported": ["ES256"],
                 "display": [
                     {
-                        "name": split_camel_case_and_concatenate_by_space(credential_types[-1]),
+                        "name": credential_types[-1],
                         "locale": "en-GB",
                         "background_color": "#12107c",
                         "text_color": "#FFFFFF",
