@@ -1961,8 +1961,8 @@ pytz = "^2024.1"
 [package.source]
 type = "git"
 url = "https://github.com/decentralised-dataexchange/sdjwt"
-reference = "2024.5.1"
-resolved_reference = "fb55d1a5aecfab2bb30b42cceddba57b7b0d09b5"
+reference = "2024.5.2"
+resolved_reference = "c225a70ce3f58d0951ed7e3655969e477ef44214"
 
 [[package]]
 name = "send2trash"
@@ -2326,7 +2326,7 @@ multidict = ">=4.0"
 [metadata]
 lock-version = "1.1"
 python-versions = ">=3.10.1,<3.11"
-content-hash = "cc3b636a923d67529a8279e10e45e356aa84e845aab928a6651f0a71b6039931"
+content-hash = "b52c3d4cd9009ea795bb16884e57b8395f710ddc9d974f516ff3b19933406e6e"
 
 [metadata.files]
 aiohttp = [

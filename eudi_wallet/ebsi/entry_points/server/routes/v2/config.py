@@ -85,6 +85,34 @@ from eudi_wallet.ebsi.usecases.v2.organisation.list_verification_request_usecase
 from eudi_wallet.ebsi.entry_points.server.v2_well_known import (
     validate_credential_type_based_on_disclosure_mapping,
 )
+from eudi_wallet.ebsi.usecases.v2.organisation.receive_credential_usecase import (
+    ReceiveCredentialUsecase,
+    ReceiveCredentialUsecaseError,
+)
+from eudi_wallet.ebsi.usecases.v2.organisation.receive_deferred_credential_usecase import (
+    ReceiveDeferredCredentialUsecase,
+    ReceiveDeferredCredentialUsecaseError,
+)
+from eudi_wallet.ebsi.usecases.v2.organisation.read_credential_usecase import (
+    ReadCredentialUsecase,
+    ReadCredentialUsecaseError,
+)
+from eudi_wallet.ebsi.usecases.v2.organisation.delete_credential_usecase import (
+    DeleteCredentialUsecase,
+    DeleteCredentialUsecaseError,
+)
+from eudi_wallet.ebsi.usecases.v2.organisation.list_credential_usecase import (
+    ListCredentialUsecase,
+)
+from eudi_wallet.ebsi.repositories.v2.credential import (
+    SqlAlchemyCredentialRepository,
+)
+from eudi_wallet.ebsi.repositories.v2.issue_credential_record import (
+    SqlAlchemyIssueCredentialRecordRepository,
+)
+from eudi_wallet.ebsi.exceptions.domain.issuer import (
+    CredentialPendingError,
+)
 
 config_routes = web.RouteTableDef()
 
@@ -730,13 +758,12 @@ async def handle_config_get_credential_offer_by_id_and_credential_schema_id(
         raise web.HTTPBadRequest(text="Credential offer not found")
 
     # FIXME: Dyanmically create credential label from credential type
-    credential_offer_entity["credentialLabel"] = (
-        credential_offer_entity.get("credential", {})
-        .get("type", [])[-1]
-        .removesuffix("SdJwt")
+    credential_offer = credential_offer_entity.to_dict()
+    credential_offer["credentialLabel"] = (
+        credential_offer.get("credential", {}).get("type", [])[-1].removesuffix("SdJwt")
     )
 
-    return web.json_response(credential_offer_entity.to_dict())
+    return web.json_response(credential_offer)
 
 
 @config_routes.get(
@@ -1239,3 +1266,207 @@ async def handle_config_list_verification_history(
     updated_verification_histories = json.dumps(verification_history)
     response_body._body = updated_verification_histories.encode("utf-8")
     return response_body
+
+
+class ReceiveCredentialReq(BaseModel):
+    credentialOffer: constr(min_length=1, strip_whitespace=True)  # type: ignore
+
+
+@config_routes.post(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/credential/receive",
+    name="handle_config_receive_credential",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_config_receive_credential(request: Request, context: V2RequestContext):
+    assert context.app_context.db_session is not None
+    assert context.app_context.logger is not None
+    assert context.app_context.domain is not None
+    assert context.legal_entity_service is not None
+    repository = SqlAlchemyCredentialRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+    issue_credential_repository = SqlAlchemyIssueCredentialRecordRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation id")
+
+    try:
+        data = await request.json()
+        req = ReceiveCredentialReq(**data)
+
+        usecase = ReceiveCredentialUsecase(
+            repository=repository,
+            issue_credential_repository=issue_credential_repository,
+            logger=context.app_context.logger,
+        )
+
+        credential = await usecase.execute(
+            credential_offer=req.credentialOffer,
+            organisation_id=organisation_id,
+            webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url,
+        )
+        return web.json_response(credential.to_dict())
+    except ValidationError as e:
+        raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
+    except ReceiveCredentialUsecaseError as e:
+        raise web.HTTPBadRequest(reason=str(e))
+
+
+@config_routes.put(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/credential/{credentialId}/receive-deferred",
+    name="handle_config_receive_credential_deferred",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_config_receive_credential_deferred(
+    request: Request, context: V2RequestContext
+):
+    assert context.app_context.db_session is not None
+    assert context.app_context.logger is not None
+    assert context.app_context.domain is not None
+    assert context.legal_entity_service is not None
+    repository = SqlAlchemyCredentialRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+    issue_credential_repository = SqlAlchemyIssueCredentialRecordRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation id")
+
+    credential_id = request.match_info.get("credentialId")
+    try:
+        uuid_obj = uuid.UUID(credential_id)
+    except ValueError:
+        raise web.HTTPBadRequest(reason="Invalid credential id")
+
+    try:
+
+        usecase = ReceiveDeferredCredentialUsecase(
+            repository=repository,
+            issue_credential_repository=issue_credential_repository,
+            logger=context.app_context.logger,
+        )
+
+        credential = await usecase.execute(
+            credential_id=credential_id,
+            organisation_id=organisation_id,
+            webhook_url=context.legal_entity_service.legal_entity_entity.webhook_url,
+        )
+        return web.json_response(credential.to_dict())
+    except CredentialPendingError as e:
+        return web.json_response(credential.to_dict())
+    except ValidationError as e:
+        raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
+    except ReceiveDeferredCredentialUsecaseError as e:
+        raise web.HTTPBadRequest(reason=str(e))
+
+
+@config_routes.get(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/credential/{credentialId}",
+    name="handle_config_read_credential",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_config_read_credential(request: Request, context: V2RequestContext):
+    assert context.app_context.db_session is not None
+    assert context.app_context.logger is not None
+    assert context.app_context.domain is not None
+    assert context.legal_entity_service is not None
+    repository = SqlAlchemyCredentialRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation ID")
+
+    credential_id = request.match_info.get("credentialId")
+    try:
+        uuid_obj = uuid.UUID(credential_id)
+    except ValueError:
+        raise web.HTTPBadRequest(reason="Invalid credential id")
+
+    try:
+        usecase = ReadCredentialUsecase(
+            repository=repository,
+            logger=context.app_context.logger,
+        )
+
+        credential = usecase.execute(credential_id=credential_id)
+        return web.json_response(credential.to_dict())
+    except ReadCredentialUsecaseError as e:
+        raise web.HTTPBadRequest(reason=str(e))
+    except ValidationError as e:
+        raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
+
+
+@config_routes.delete(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/credential/{credentialId}",
+    name="handle_config_delete_credential",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_config_delete_credential(request: Request, context: V2RequestContext):
+    assert context.app_context.db_session is not None
+    assert context.app_context.logger is not None
+    assert context.app_context.domain is not None
+    assert context.legal_entity_service is not None
+    repository = SqlAlchemyCredentialRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation ID")
+
+    credential_id = request.match_info.get("credentialId")
+    try:
+        uuid_obj = uuid.UUID(credential_id)
+    except ValueError:
+        raise web.HTTPBadRequest(reason="Invalid credential id")
+
+    try:
+        usecase = DeleteCredentialUsecase(
+            repository=repository,
+            logger=context.app_context.logger,
+        )
+
+        usecase.execute(
+            organisation_id=organisation_id,
+            credential_id=credential_id,
+        )
+        return web.json_response(status=204)
+    except DeleteCredentialUsecaseError as e:
+        raise web.HTTPBadRequest(reason=str(e))
+    except ValidationError as e:
+        raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
+
+
+@config_routes.get(
+    "/organisation/{organisationId}/config/digital-wallet/openid/sdjwt/credentials",
+    name="handle_config_list_credentials",
+)  # type: ignore
+@v2_inject_request_context()
+async def handle_config_list_credentials(request: Request, context: V2RequestContext):
+    assert context.app_context.db_session is not None
+    assert context.app_context.logger is not None
+    assert context.app_context.domain is not None
+    assert context.legal_entity_service is not None
+    repository = SqlAlchemyCredentialRepository(
+        session=context.app_context.db_session, logger=context.app_context.logger
+    )
+    organisation_id = request.match_info.get("organisationId")
+    if organisation_id is None:
+        raise web.HTTPBadRequest(reason="Invalid organisation ID")
+
+    try:
+        usecase = ListCredentialUsecase(
+            repository=repository,
+            logger=context.app_context.logger,
+        )
+
+        credentials = usecase.execute(
+            organisation_id=organisation_id,
+        )
+        return web.json_response([credentials.to_dict() for credentials in credentials])
+    except ValidationError as e:
+        raise web.HTTPBadRequest(reason=json.dumps(e.errors()))
