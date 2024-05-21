@@ -8,17 +8,18 @@ from dataclasses import dataclass
 
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric import ec, ed25519
 from jwcrypto import jwk, jwt
 from multiformats import multibase, multicodec
 
 
 @dataclass
 class PublicKeyJWK:
-    crv: str
-    kty: str
-    x: str
-    y: str
+    crv: str = None
+    kty: str = None
+    x: str = None
+    y: str = None
+    kid: str = None
 
 
 class KeyDid:
@@ -42,6 +43,30 @@ class KeyDid:
     @property
     def public_key_jwk(self):
         return self._public_key_jwk
+    
+    def create_keypairEd25519(self):
+
+        private_key = ed25519.Ed25519PrivateKey.generate()
+        public_key = private_key.public_key()
+
+        private_key_jwk = jwk.JWK.from_pem(
+            private_key.private_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PrivateFormat.PKCS8,
+                encryption_algorithm=serialization.NoEncryption(),
+            )
+        )
+        public_key_jwk = jwk.JWK.from_pem(
+            public_key.public_bytes(
+                encoding=serialization.Encoding.PEM,
+                format=serialization.PublicFormat.SubjectPublicKeyInfo,
+            )
+        )
+
+        self._key = private_key_jwk
+        self._public_key = public_key_jwk
+        self._public_key_jwk = public_key_jwk.export_public(as_dict=True)
+        self._private_key_jwk = private_key_jwk.export_private(as_dict=True)
 
     def create_keypair(self):
         curve = ec.SECP256R1()
@@ -96,7 +121,9 @@ class KeyDid:
         jwk_dict = json.loads(jwk_str)
         return jwk.JWK(**jwk_dict)
 
-    def generate_id_token(self, did: str = None, auth_server_uri: str = None, nonce: str = None) -> str:
+    def generate_id_token(
+        self, did: str = None, auth_server_uri: str = None, nonce: str = None
+    ) -> str:
         header = {
             "typ": "JWT",
             "alg": "ES256",
@@ -116,10 +143,32 @@ class KeyDid:
 
         return token.serialize()
 
-    def generate_credential_request(self, did: str = None, issuer_uri: str = None, nonce: str = None) -> str:
+    def generate_credential_request(
+        self, did: str = None, issuer_uri: str = None, nonce: str = None
+    ) -> str:
         header = {
             "typ": "openid4vci-proof+jwt",
             "alg": "ES256",
+            "kid": f"{did or self._did}#{self._key.key_id if did else self._method_specific_id}",
+        }
+        payload = {
+            "iss": self._did,
+            "iat": int(time.time()),
+            "aud": issuer_uri,
+            "exp": int(time.time()) + 86400,
+            "nonce": nonce,
+        }
+        token = jwt.JWT(header=header, claims=payload)
+        token.make_signed_token(self._key)
+
+        return token.serialize()
+
+    def generate_credential_requestEd25519(
+        self, did: str = None, issuer_uri: str = None, nonce: str = None
+    ) -> str:
+        header = {
+            "typ": "openid4vci-proof+jwt",
+            "alg": "EdDSA",
             "kid": f"{did or self._did}#{self._key.key_id if did else self._method_specific_id}",
         }
         payload = {

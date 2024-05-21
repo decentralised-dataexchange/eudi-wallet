@@ -66,7 +66,6 @@ async def http_call_text_redirects_disabled(url, method, data=None, headers=None
         async with session.request(
             method, url, data=data, allow_redirects=False
         ) as resp:
-            print(await resp.text())
             return resp
 
 
@@ -97,7 +96,6 @@ async def http_call(url, method, data=None, headers=None):
     """
     async with aiohttp.ClientSession(headers=headers) as session:
         async with session.request(method, url, data=data) as resp:
-            print(await resp.text())
             return await resp.json()
 
 

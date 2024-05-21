@@ -144,7 +144,6 @@ async def accept_and_fetch_credential_offer(
     credential_offer_uri: str,
 ) -> CredentialOffer:
     cred_offer = await http_call(credential_offer_uri, "GET", data=None, headers=None)
-    print(cred_offer)
     return CredentialOffer(**cred_offer)
 
 
@@ -172,10 +171,12 @@ class Credential:
 @dataclass
 class OpenIDCredentialIssuerConfig:
     credential_issuer: str
-    authorization_server: str
+    authorization_servers: typing.List[str]
+    token_endpoint: str
     credential_endpoint: str
-    deferred_credential_endpoint: str
     credentials_supported: typing.List[Credential]
+    deferred_credential_endpoint: str = None
+    authorization_server: str = None
     display: typing.Optional[str] = None
 
 
@@ -207,27 +208,29 @@ class VPFormatsSupported:
 
 @dataclass
 class OpenIDAuthServerConfig:
-    redirect_uris: typing.List[str]
-    issuer: str
-    authorization_endpoint: str
-    token_endpoint: str
-    jwks_uri: str
-    scopes_supported: typing.List[str]
-    response_types_supported: typing.List[str]
-    response_modes_supported: typing.List[str]
-    grant_types_supported: typing.List[str]
-    subject_types_supported: typing.List[str]
-    id_token_signing_alg_values_supported: typing.List[str]
-    request_object_signing_alg_values_supported: typing.List[str]
-    request_parameter_supported: bool
-    request_uri_parameter_supported: bool
-    token_endpoint_auth_methods_supported: typing.List[str]
-    request_authentication_methods_supported: RequestAuthenticationMethodsSupported
-    vp_formats_supported: VPFormatsSupported
-    subject_syntax_types_supported: typing.List[str]
-    subject_syntax_types_discriminations: typing.List[str]
-    subject_trust_frameworks_supported: typing.List[str]
-    id_token_types_supported: typing.List[str]
+    redirect_uris: typing.List[str] = None
+    issuer: str = None
+    authorization_endpoint: str = None
+    token_endpoint: str = None
+    jwks_uri: str = None
+    scopes_supported: typing.List[str] = None
+    response_types_supported: typing.List[str] = None
+    response_modes_supported: typing.List[str] = None
+    grant_types_supported: typing.List[str] = None
+    subject_types_supported: typing.List[str] = None
+    id_token_signing_alg_values_supported: typing.List[str] = None
+    request_object_signing_alg_values_supported: typing.List[str] = None
+    request_parameter_supported: bool = None
+    request_uri_parameter_supported: bool = None
+    token_endpoint_auth_methods_supported: typing.List[str] = None
+    request_authentication_methods_supported: RequestAuthenticationMethodsSupported = (
+        None
+    )
+    vp_formats_supported: VPFormatsSupported = None
+    subject_syntax_types_supported: typing.List[str] = None
+    subject_syntax_types_discriminations: typing.List[str] = None
+    subject_trust_frameworks_supported: typing.List[str] = None
+    id_token_types_supported: typing.List[str] = None
 
 
 async def fetch_openid_auth_server_configuration(authorization_server_uri: str) -> dict:
@@ -412,12 +415,12 @@ async def send_vp_token_response(
 
 @dataclass
 class AccessTokenResponse:
-    access_token: str
-    token_type: str
-    expires_in: int
-    id_token: str
-    c_nonce: str
-    c_nonce_expires_in: int
+    access_token: str = None
+    token_type: str = None
+    expires_in: int = None
+    id_token: str = None
+    c_nonce: str = None
+    c_nonce_expires_in: int = None
     scope: typing.Optional[str] = None
 
 
@@ -445,16 +448,21 @@ async def exchange_pre_authorized_code_for_access_token(
 ) -> AccessTokenResponse:
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
 
-    query_params = {
-        "grant_type": "urn:ietf:params:oauth:grant-type:pre-authorized_code",
-        "user_pin": user_pin,
-        "pre-authorized_code": pre_authorized_code,
-    }
+    if user_pin:
+        query_params = {
+            "grant_type": "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+            "user_pin": user_pin,
+            "pre-authorized_code": pre_authorized_code,
+        }
+    else:
+        query_params = {
+            "grant_type": "urn:ietf:params:oauth:grant-type:pre-authorized_code",
+            "pre-authorized_code": pre_authorized_code,
+        }
     encoded_params = urllib.parse.urlencode(query_params)
     access_token_response = await http_call(
         token_uri, "POST", data=encoded_params, headers=headers
     )
-    print(access_token_response)
     return AccessTokenResponse(**access_token_response)
 
 
@@ -470,8 +478,10 @@ async def send_credential_request(
     }
 
     data = {
-        "types": credential_types,
-        "format": "jwt_vc",
+        "credential_definition": {
+            "type": credential_types,
+        },
+        "format": "jwt_vc_json",
         "proof": {"proof_type": "jwt", "jwt": credential_request_jwt},
     }
     credential_response = await http_call(
